@@ -1,6 +1,9 @@
 #include "minet_socket.h"
 #include <stdlib.h>
+#include <iostream>
 #include <ctype.h>
+
+using namespace std;
 
 #define BUFSIZE 1024
 
@@ -15,7 +18,7 @@ int main(int argc, char * argv[]) {
     int rc = -1;
     int datalen = 0;
     bool ok = true;
-    struct sockaddr_in sa;
+    struct sockaddr_in * sa;
     FILE * wheretoprint = stdout;
     struct hostent * site = NULL;
     char * req = NULL;
@@ -51,16 +54,35 @@ int main(int argc, char * argv[]) {
     }
 
     /* create socket */
+    sock = minet_socket(SOCK_STREAM);
 
     // Do DNS lookup
     /* Hint: use gethostbyname() */
+    site = gethostbyname(server_name);
 
     /* set address */
 
+    sa->sin_family = AF_INET;
+    bcopy((char*) site->h_addr, (char*) &(sa->sin_addr), site->h_length);
+    //sa->sin_addr = (site->h_addr);
+    sa->sin_port = htons(server_port);
+
+    //int x = minet_bind(sock, sa);  
+    //cout << x << "\n";
+ 
     /* connect socket */
+    if (minet_connect(sock, sa) != 0){
+        minet_close(sock);
+        cout << "did not connect\n";
+        return -1;
+    };
+
+    cout << "did connect\n";
     
     /* send request */
-
+    int z = minet_read(sock, buf, BUFSIZE);
+    cout << z << "\n";
+    cout << buf << "\n";
     /* wait till socket can be read */
     /* Hint: use select(), and ignore timeout for now. */
     
@@ -76,7 +98,7 @@ int main(int argc, char * argv[]) {
     /* second read loop -- print out the rest of the response */
     
     /*close socket and deinitialize */
-
+    minet_close(sock);
 
     if (ok) {
 	return 0;
