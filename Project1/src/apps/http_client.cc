@@ -9,6 +9,8 @@ using namespace std;
 
 int write_n_bytes(int fd, char * buf, int count);
 
+int fail_and_exit(int sock);
+
 int main(int argc, char * argv[]) {
     char * server_name = NULL;
     int server_port = 0;
@@ -17,7 +19,6 @@ int main(int argc, char * argv[]) {
     int sock = 0;
     int rc = -1;
     int datalen = 0;
-    bool ok = true;
     struct sockaddr_in * sa;
     FILE * wheretoprint = stdout;
     struct hostent * site = NULL;
@@ -27,14 +28,14 @@ int main(int argc, char * argv[]) {
     char * bptr = NULL;
     char * bptr2 = NULL;
     char * endheaders = NULL;
-   
+
     struct timeval timeout;
     fd_set set;
 
     /*parse args */
     if (argc != 5) {
-	fprintf(stderr, "usage: http_client k|u server port path\n");
-	exit(-1);
+    fprintf(stderr, "usage: http_client k|u server port path\n");
+    exit(-1);
     }
 
     server_name = argv[2];
@@ -44,21 +45,27 @@ int main(int argc, char * argv[]) {
 
 
     /* initialize minet */
-    if (toupper(*(argv[1])) == 'K') { 
-	minet_init(MINET_KERNEL);
-    } else if (toupper(*(argv[1])) == 'U') { 
-	minet_init(MINET_USER);
+    if (toupper(*(argv[1])) == 'K') {
+    minet_init(MINET_KERNEL);
+    } else if (toupper(*(argv[1])) == 'U') {
+    minet_init(MINET_USER);
     } else {
-	fprintf(stderr, "First argument must be k or u\n");
-	exit(-1);
+    fprintf(stderr, "First argument must be k or u\n");
+    exit(-1);
     }
 
     /* create socket */
-    sock = minet_socket(SOCK_STREAM);
+    sock = minet_socket(SOCK_STREAM);//
 
     // Do DNS lookup
     /* Hint: use gethostbyname() */
     site = gethostbyname(server_name);
+
+    if (site == NULL)
+    {
+        cout << "failed to gethostbyname\n";
+        fail_and_exit(sock);
+    }
 
     /* set address */
     sa = (sockaddr_in *)malloc(sizeof(sockaddr_in));
@@ -69,72 +76,100 @@ int main(int argc, char * argv[]) {
     //sa->sin_addr = (site->h_addr);
     sa->sin_port = htons(server_port);
 
-    //int x = minet_bind(sock, sa);  
+    //int x = minet_bind(sock, sa);
     //cout << x << "\n";
- 
+
     /* connect socket */
     if (minet_connect(sock, sa) != 0){
         cout << "did not connect\n";
-        ok = false;
+        fail_and_exit(sock);
     };
 
-    cout << "1\n";
+    //cout << "1\n";
 
     /* send request */
     req = (char *)malloc(strlen(server_path) + 15);
     sprintf(req, "GET %s HTTP/1.0\n\n", server_path);
-    if (ok && minet_write(sock, req, strlen(req)) < 0)
+    if (minet_write(sock, req, strlen(req)) < 0)
     {
         cout << "failed to write request\n";
-        ok = false;
+        fail_and_exit(sock);
     }
 
-    cout << "2\n";
+    //cout << "2\n";
 
     /* wait till socket can be read */
     /* Hint: use select(), and ignore timeout for now. */
     FD_ZERO(&set);
     FD_SET(sock, &set);
-    if (ok && !FD_ISSET(sock, &set))
+    if (!FD_ISSET(sock, &set))
     {
         cout << "socket not set\n";
-        ok = false;
+        fail_and_exit(sock);
     }
 
-    cout << "3\n";
-    if (ok && minet_select(sock+1,&set,0,0,&timeout) < 1) {
+    //cout << "3\n";
+    if (minet_select(sock+1,&set,0,0,&timeout) < 1) {
         cout << "select socket error\n";
-        ok = false;
+        fail_and_exit(sock);
     }
 
-    cout << "4\n";
+    //cout << "4\n";
 
     /* first read loop -- read headers */
-    if (ok && minet_read(sock, buf, BUFSIZE) < 0)
+    if (minet_read(sock, buf, BUFSIZE) < 0)
     {
         cout << "failed to read\n";
-        ok = false;
+        fail_and_exit(sock);
     }
 
-    cout << buf << "\n";
-
-    /* examine return code */   
+    /* examine return code */
     //Skip "HTTP/1.0"
     //remove the '\0'
     // Normal reply has return code 200
 
+    char* cut = buf;
+
+    while (cut[-1] != ' ')
+        cut++;
+
+    char tmp[4];
+    strncpy(tmp, cut, 3);
+    tmp[4] = '\0';
+
+    rc = atoi(tmp);
+
+    if (rc != 200 || rc < 300 || rc >= 400)
+        wheretoprint = stderr;
+
+    fprintf(wheretoprint, "Status: %d\n\n", rc);
+
+
+
+    while (cut[-1] != '\n')
+        cut++;
+
     /* print first part of response */
 
-    /* second read loop -- print out the rest of the response */
-    
+    while (!(cut[-2] == '\n' && cut[0] == '\n'))
+    {
+        fprintf(wheretoprint, "%c", cut[0]);
+        cut++;
+    }
+
+    fprintf(wheretoprint, "\n\nHTML RESPONSE BODY:\n\n");
+    fprintf(wheretoprint, "%s", cut);
+
+    datalen = minet_read(sock, buf, BUFSIZE);
+    while (datalen > 0) {
+        buf[datalen] = '\0';
+        fprintf(wheretoprint, "%s", buf);
+        datalen = minet_read(sock, buf, BUFSIZE);
+    }
+
     /*close socket and deinitialize */
     minet_close(sock);
-
-    if (ok) {
-	return 0;
-    } else {
-	return -1;
-    }
+    return 0;
 }
 
 int write_n_bytes(int fd, char * buf, int count) {
@@ -142,14 +177,19 @@ int write_n_bytes(int fd, char * buf, int count) {
     int totalwritten = 0;
 
     while ((rc = minet_write(fd, buf + totalwritten, count - totalwritten)) > 0) {
-	totalwritten += rc;
+    totalwritten += rc;
     }
-    
+
     if (rc < 0) {
-	return -1;
+    return -1;
     } else {
-	return totalwritten;
+    return totalwritten;
     }
+}
+
+int fail_and_exit(int sock) {
+    minet_close(sock);
+    exit(-1);
 }
 
 
