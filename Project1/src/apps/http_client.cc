@@ -61,9 +61,11 @@ int main(int argc, char * argv[]) {
     site = gethostbyname(server_name);
 
     /* set address */
+    sa = (sockaddr_in *)malloc(sizeof(sockaddr_in));
+    memset(sa, 0, sizeof(sockaddr_in));
 
     sa->sin_family = AF_INET;
-    bcopy((char*) site->h_addr, (char*) &(sa->sin_addr), site->h_length);
+    memcpy((char*) &(sa->sin_addr), (char*) site->h_addr, site->h_length);
     //sa->sin_addr = (site->h_addr);
     sa->sin_port = htons(server_port);
 
@@ -72,22 +74,50 @@ int main(int argc, char * argv[]) {
  
     /* connect socket */
     if (minet_connect(sock, sa) != 0){
-        minet_close(sock);
         cout << "did not connect\n";
-        return -1;
+        ok = false;
     };
 
-    cout << "did connect\n";
-    
+    cout << "1\n";
+
     /* send request */
-    int z = minet_read(sock, buf, BUFSIZE);
-    cout << z << "\n";
-    cout << buf << "\n";
+    req = (char *)malloc(strlen(server_path) + 15);
+    sprintf(req, "GET %s HTTP/1.0\n\n", server_path);
+    if (ok && minet_write(sock, req, strlen(req)) < 0)
+    {
+        cout << "failed to write request\n";
+        ok = false;
+    }
+
+    cout << "2\n";
+
     /* wait till socket can be read */
     /* Hint: use select(), and ignore timeout for now. */
-    
+    FD_ZERO(&set);
+    FD_SET(sock, &set);
+    if (ok && !FD_ISSET(sock, &set))
+    {
+        cout << "socket not set\n";
+        ok = false;
+    }
+
+    cout << "3\n";
+    if (ok && minet_select(sock+1,&set,0,0,&timeout) < 1) {
+        cout << "select socket error\n";
+        ok = false;
+    }
+
+    cout << "4\n";
+
     /* first read loop -- read headers */
-    
+    if (ok && minet_read(sock, buf, BUFSIZE) < 0)
+    {
+        cout << "failed to read\n";
+        ok = false;
+    }
+
+    cout << buf << "\n";
+
     /* examine return code */   
     //Skip "HTTP/1.0"
     //remove the '\0'
