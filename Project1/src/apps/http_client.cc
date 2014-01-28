@@ -9,7 +9,7 @@ using namespace std;
 
 int write_n_bytes(int fd, char * buf, int count);
 
-int fail_and_exit(int sock);
+int fail_and_exit(int sock, const char * errorMsg);
 
 int main(int argc, char * argv[]) {
     char * server_name = NULL;
@@ -19,15 +19,15 @@ int main(int argc, char * argv[]) {
     int sock = 0;
     int rc = -1;
     int datalen = 0;
-    struct sockaddr_in * sa;
+    struct sockaddr_in sa;
     FILE * wheretoprint = stdout;
     struct hostent * site = NULL;
     char * req = NULL;
 
     char buf[BUFSIZE + 1];
-    char * bptr = NULL;
-    char * bptr2 = NULL;
-    char * endheaders = NULL;
+    //char * bptr = NULL;
+    //char * bptr2 = NULL;
+    //char * endheaders = NULL;
 
     struct timeval timeout;
     fd_set set;
@@ -41,8 +41,6 @@ int main(int argc, char * argv[]) {
     server_name = argv[2];
     server_port = atoi(argv[3]);
     server_path = argv[4];
-
-
 
     /* initialize minet */
     if (toupper(*(argv[1])) == 'K') {
@@ -63,40 +61,30 @@ int main(int argc, char * argv[]) {
 
     if (site == NULL)
     {
-        cout << "failed to gethostbyname\n";
-        fail_and_exit(sock);
+        fail_and_exit(sock, "Failed to gethostbyname\n");
     }
 
     /* set address */
-    sa = (sockaddr_in *)malloc(sizeof(sockaddr_in));
-    memset(sa, 0, sizeof(sockaddr_in));
+    memset(&sa, 0, sizeof(sa));
 
-    sa->sin_family = AF_INET;
-    memcpy((char*) &(sa->sin_addr), (char*) site->h_addr, site->h_length);
-    //sa->sin_addr = (site->h_addr);
-    sa->sin_port = htons(server_port);
-
-    //int x = minet_bind(sock, sa);
-    //cout << x << "\n";
+    sa.sin_family = AF_INET;
+    memcpy((char*) &(sa.sin_addr), (char*) site->h_addr, site->h_length);
+    sa.sin_port = htons(server_port);
 
     /* connect socket */
-    if (minet_connect(sock, sa) != 0){
-        cout << "did not connect\n";
-        fail_and_exit(sock);
+    if (minet_connect(sock, &sa) != 0){
+        fail_and_exit(sock, "Did not connect to socket\n");
     };
-
-    //cout << "1\n";
 
     /* send request */
     req = (char *)malloc(strlen(server_path) + 15);
     sprintf(req, "GET %s HTTP/1.0\n\n", server_path);
-    if (minet_write(sock, req, strlen(req)) < 0)
+    if (write_n_bytes(sock, req, strlen(req)) < 0)
     {
-        cout << "failed to write request\n";
-        fail_and_exit(sock);
+        free(req);
+        fail_and_exit(sock, "Failed to write request\n");
     }
-
-    //cout << "2\n";
+    free(req);
 
     /* wait till socket can be read */
     /* Hint: use select(), and ignore timeout for now. */
@@ -104,23 +92,17 @@ int main(int argc, char * argv[]) {
     FD_SET(sock, &set);
     if (!FD_ISSET(sock, &set))
     {
-        cout << "socket not set\n";
-        fail_and_exit(sock);
+        fail_and_exit(sock, "Socket not set\n");
     }
 
-    //cout << "3\n";
     if (minet_select(sock+1,&set,0,0,&timeout) < 1) {
-        cout << "select socket error\n";
-        fail_and_exit(sock);
+        fail_and_exit(sock, "Select socket error\n");
     }
-
-    //cout << "4\n";
 
     /* first read loop -- read headers */
     if (minet_read(sock, buf, BUFSIZE) < 0)
     {
-        cout << "failed to read\n";
-        fail_and_exit(sock);
+        fail_and_exit(sock, "Failed to read\n");
     }
 
     /* examine return code */
@@ -139,18 +121,15 @@ int main(int argc, char * argv[]) {
 
     rc = atoi(tmp);
 
-    if (rc != 200 || rc < 300 || rc >= 400)
+    if (rc != 200 && (rc < 300 || rc >= 400))
         wheretoprint = stderr;
 
     fprintf(wheretoprint, "Status: %d\n\n", rc);
-
-
 
     while (cut[-1] != '\n')
         cut++;
 
     /* print first part of response */
-
     while (!(cut[-2] == '\n' && cut[0] == '\n'))
     {
         fprintf(wheretoprint, "%c", cut[0]);
@@ -187,7 +166,8 @@ int write_n_bytes(int fd, char * buf, int count) {
     }
 }
 
-int fail_and_exit(int sock) {
+int fail_and_exit(int sock, const char * errorMsg) {
+    fprintf(stderr,errorMsg);
     minet_close(sock);
     exit(-1);
 }
