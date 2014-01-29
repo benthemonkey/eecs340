@@ -11,6 +11,8 @@ int handle_connection(int);
 int writenbytes(int,char *,int);
 int readnbytes(int,char *,int);
 
+int fail_and_exit(int sock, const char * errorMsg);
+
 int main(int argc,char *argv[])
 {
   int server_port;
@@ -31,18 +33,47 @@ int main(int argc,char *argv[])
     exit(-1);
   }
 
+  /* initialize minet */
+  if (toupper(*(argv[1])) == 'K') {
+  minet_init(MINET_KERNEL);
+  } else if (toupper(*(argv[1])) == 'U') {
+  minet_init(MINET_USER);
+  } else {
+  fprintf(stderr, "First argument must be k or u\n");
+  exit(-1);
+  }
+
   /* initialize and make socket */
+  sock = minet_socket(SOCK_STREAM);
 
   /* set server address*/
+  memset(&sa, 0, sizeof(sa));
+
+  sa.sin_family = AF_INET;
+  sa.sin_port = htons(server_port);
+  sa.sin_addr.s_addr = htonl(INADDR_ANY);
 
   /* bind listening socket */
+  if (minet_bind(sock, &sa) < 0)
+  {
+    fail_and_exit(sock, "Could not bind to socket\n");
+  }
 
   /* start listening */
+  if (minet_listen(sock, 5) < 0) //queue up to 5 connections...could easily change this #
+  {
+    fail_and_exit(sock, "Error while listening on socket\n");
+  }
 
   /* connection handling loop */
   while(1)
   {
     /* handle connections */
+    memset(&sa2, 0, sizeof(sa2));
+    if ((sock2 = minet_accept(sock, &sa2)) < 0)
+    {
+      fail_and_exit(sock, "Error accepting a connection\n");
+    }
     rc = handle_connection(sock2);
   }
 }
@@ -58,11 +89,11 @@ int handle_connection(int sock2)
   char *endheaders;
   char *bptr;
   int datalen=0;
-  char *ok_response_f = "HTTP/1.0 200 OK\r\n"\
+  const char *ok_response_f = "HTTP/1.0 200 OK\r\n"\
                       "Content-type: text/plain\r\n"\
                       "Content-length: %d \r\n\r\n";
   char ok_response[100];
-  char *notok_response = "HTTP/1.0 404 FILE NOT FOUND\r\n"\
+  const char *notok_response = "HTTP/1.0 404 FILE NOT FOUND\r\n"\
                          "Content-type: text/html\r\n\r\n"\
                          "<html><body bgColor=black text=white>\n"\
                          "<h2>404 FILE NOT FOUND</h2>\n"
@@ -70,7 +101,12 @@ int handle_connection(int sock2)
   bool ok=true;
 
   /* first read loop -- get request and headers*/
+  if (minet_read(sock2, buf, BUFSIZE) < 0)
+  {
+    fail_and_exit(sock2, "Failed to read\n");
+  }
 
+  printf("%s\n", buf);
   /* parse request to get file name */
   /* Assumption: this is a GET request and filename contains no spaces*/
 
@@ -88,6 +124,7 @@ int handle_connection(int sock2)
   }
 
   /* close socket and free space */
+  minet_close(sock2);
 
   if (ok)
     return 0;
@@ -123,3 +160,8 @@ int writenbytes(int fd,char *str,int size)
     return totalwritten;
 }
 
+int fail_and_exit(int sock, const char * errorMsg) {
+    fprintf(stderr,errorMsg);
+    minet_close(sock);
+    exit(-1);
+}
