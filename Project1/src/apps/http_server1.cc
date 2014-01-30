@@ -80,7 +80,7 @@ int main(int argc,char *argv[])
 
 int handle_connection(int sock2)
 {
-  char filename[FILENAMESIZE+1];
+  //char filename[FILENAMESIZE+1];
   int rc;
   int fd;
   struct stat filestat;
@@ -106,21 +106,49 @@ int handle_connection(int sock2)
     fail_and_exit(sock2, "Failed to read\n");
   }
 
-  printf("%s\n", buf);
   /* parse request to get file name */
   /* Assumption: this is a GET request and filename contains no spaces*/
 
-    /* try opening the file */
+  char *typeOfRequest = strtok(buf," \r\n");
+  if (typeOfRequest == NULL || strcasecmp(typeOfRequest, "GET") != 0)
+  {
+    printf("Ill-formed request - must use GET\n"); //send error response?
+  }
+
+  char *filename = strtok(NULL, " \r\n");
+  if (filename == NULL)
+  {
+    printf("Ill-formed request - must specify filename\n"); //send error response?
+  }
+
+  char *httpVersion = strtok(NULL," \r\n");
+  if (httpVersion == NULL || strcasecmp(httpVersion, "http/1.0") != 0)
+  {
+    printf("Ill-formed request - must specify correct http version\n"); //send error response?
+  }
+
+  /* try opening the file */
+
 
   /* send response */
   if (ok)
   {
     /* send headers */
-
+    sprintf(ok_response, ok_response_f, datalen);
+    if (writenbytes(sock2, ok_response, strlen(ok_response)) < 0)
+    {
+        fail_and_exit(sock2, "Failed to send response\n");
+    }
     /* send file */
+    
+
   }
   else // send error response
   {
+    if (writenbytes(sock2, (char *)notok_response, strlen(notok_response)) < 0)
+    {
+        fail_and_exit(sock2, "Failed to write error response\n");
+    }
   }
 
   /* close socket and free space */
