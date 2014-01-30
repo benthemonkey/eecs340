@@ -29,7 +29,7 @@ int main(int argc, char * argv[]) {
     //char * bptr2 = NULL;
     //char * endheaders = NULL;
 
-    struct timeval timeout;
+    //struct timeval timeout;
     fd_set set;
 
     /*parse args */
@@ -90,12 +90,12 @@ int main(int argc, char * argv[]) {
     /* Hint: use select(), and ignore timeout for now. */
     FD_ZERO(&set);
     FD_SET(sock, &set);
-    if (!FD_ISSET(sock, &set))
-    {
-        fail_and_exit(sock, "Socket not set\n");
-    }
+    // if (!FD_ISSET(sock, &set))
+    // {
+    //     fail_and_exit(sock, "Socket not set\n");
+    // }
 
-    if (minet_select(sock+1,&set,0,0,&timeout) < 1) {
+    if (minet_select(sock+1,&set,NULL,NULL,NULL) < 1) {
         fail_and_exit(sock, "Select socket error\n");
     }
 
