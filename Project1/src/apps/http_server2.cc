@@ -182,7 +182,12 @@ int handle_connection(int sock2)
   }
 
   /* try opening the file */
+  FILE* myfile = fopen(filename, "r");
+  fread(buf, sizeof(char), BUFSIZE, myfile);
 
+  if(strlen(buf) < 0){
+    printf("Error opening file\n");
+  }
 
   /* send response */
   if (ok)
@@ -194,7 +199,10 @@ int handle_connection(int sock2)
         fail_and_exit(sock2, "Failed to send response\n");
     }
     /* send file */
-
+    if (writenbytes(sock2, buf, strlen(buf)) < 0)
+    {
+      fail_and_exit(sock2, "Failed to send file\n");
+    }
 
   }
   else // send error response
