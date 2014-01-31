@@ -141,13 +141,15 @@ int handle_connection(int sock2)
   if(stat(path, &filestat) < 0){
     printf("Error opening file\n");
     ok = false;
+  } else {
+    datalen = filestat.st_size;
+
+    FILE* myfile = fopen(path, "r");
+
+    memset(buf, 0, BUFSIZE + 1);
+    fread(buf, sizeof(char), BUFSIZE, myfile);
   }
-  datalen = filestat.st_size;
 
-  FILE* myfile = fopen(path, "r");
-
-  memset(buf, 0, BUFSIZE + 1);
-  fread(buf, sizeof(char), BUFSIZE, myfile);
 
   /* send response */
   if (ok)
