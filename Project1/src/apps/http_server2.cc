@@ -182,12 +182,21 @@ int handle_connection(int sock2)
   }
 
   /* try opening the file */
-  FILE* myfile = fopen(filename, "r");
-  fread(buf, sizeof(char), BUFSIZE, myfile);
+  char path[FILENAMESIZE + 1];
+  memset(path, 0, FILENAMESIZE + 1); // memset path
+  getcwd(path, FILENAMESIZE);
+  strncpy(path + strlen(path), filename, strlen(filename));
 
-  if(strlen(buf) < 0){
+  if(stat(path, &filestat) < 0){
     printf("Error opening file\n");
+    ok = false;
   }
+  datalen = filestat.st_size;
+
+  FILE* myfile = fopen(path, "r");
+
+  memset(buf, 0, BUFSIZE + 1);
+  fread(buf, sizeof(char), BUFSIZE, myfile);
 
   /* send response */
   if (ok)
@@ -202,6 +211,9 @@ int handle_connection(int sock2)
     if (writenbytes(sock2, buf, strlen(buf)) < 0)
     {
       fail_and_exit(sock2, "Failed to send file\n");
+    } else {
+      minet_close(sock2);
+      return 0;
     }
 
   }
@@ -210,16 +222,15 @@ int handle_connection(int sock2)
     if (writenbytes(sock2, (char *)notok_response, strlen(notok_response)) < 0)
     {
         fail_and_exit(sock2, "Failed to write error response\n");
+    } else {
+      minet_close(sock2);
+      return 0;
     }
   }
 
   /* close socket and free space */
   minet_close(sock2);
-
-  if (ok)
-    return 0;
-  else
-    return -1;
+  return -1;
 }
 
 int readnbytes(int fd,char *buf,int size)
