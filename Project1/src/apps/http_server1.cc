@@ -83,13 +83,13 @@ int main(int argc,char *argv[])
 int handle_connection(int sock2)
 {
   //char filename[FILENAMESIZE+1];
-  int rc;
-  int fd;
+  //int rc;
+  //int fd;
   struct stat filestat;
   char buf[BUFSIZE+1];
-  char *headers;
-  char *endheaders;
-  char *bptr;
+  //char *headers;
+  //char *endheaders;
+  //char *bptr;
   int datalen=0;
   const char *ok_response_f = "HTTP/1.0 200 OK\r\n"\
                       "Content-type: text/plain\r\n"\
@@ -138,6 +138,8 @@ int handle_connection(int sock2)
   getcwd(path, FILENAMESIZE);
   strncpy(path + strlen(path), filename, strlen(filename));
 
+  char *filedata;
+
   if(stat(path, &filestat) < 0){
     printf("Error opening file\n");
     ok = false;
@@ -146,8 +148,9 @@ int handle_connection(int sock2)
 
     FILE* myfile = fopen(path, "r");
 
-    memset(buf, 0, BUFSIZE + 1);
-    fread(buf, sizeof(char), BUFSIZE, myfile);
+    filedata = (char *)malloc(datalen);
+    memset(filedata, 0, datalen);
+    fread(filedata, 1, datalen, myfile);
   }
 
 
@@ -161,7 +164,7 @@ int handle_connection(int sock2)
         fail_and_exit(sock2, "Failed to send response\n");
     }
     /* send file */
-    if (writenbytes(sock2, buf, strlen(buf)) < 0)
+    if (writenbytes(sock2, filedata, datalen) < 0)
     {
       fail_and_exit(sock2, "Failed to send file\n");
     } else {
@@ -183,6 +186,7 @@ int handle_connection(int sock2)
 
   /* close socket and free space */
   minet_close(sock2);
+  free(filedata);
   return -1;
 }
 
