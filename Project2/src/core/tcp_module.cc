@@ -14,7 +14,7 @@
 #include <iostream>
 
 #include "Minet.h"
-
+#include "tcpstate.h"
 
 using std::cout;
 using std::endl;
@@ -24,6 +24,8 @@ using std::string;
 int main(int argc, char *argv[])
 {
   MinetHandle mux, sock;
+
+  ConnectionList<TCPState> clist;
 
   MinetInit(MINET_TCP_MODULE);
 
@@ -43,37 +45,87 @@ int main(int argc, char *argv[])
   MinetSendToMonitor(MinetMonitoringEvent("tcp_module handling TCP traffic"));
 
   MinetEvent event;
-
+  cerr << "1" << endl;
   while (MinetGetNextEvent(event)==0) {
+    cerr << "2" << endl;
     // if we received an unexpected type of event, print error
-    if (event.eventtype!=MinetEvent::Dataflow 
-	|| event.direction!=MinetEvent::IN) {
+
+    if (event.eventtype!=MinetEvent::Dataflow || event.direction!=MinetEvent::IN) {
       MinetSendToMonitor(MinetMonitoringEvent("Unknown event ignored."));
-    // if we received a valid event from Minet, do processing
+      // if we received a valid event from Minet, do processing
     } else {
-      //  Data from the IP layer below  //
+      cerr << "3" << endl;
+        //  Data from the IP layer below  //
       if (event.handle==mux) {
-	Packet p;
-	MinetReceive(mux,p);
-	unsigned tcphlen=TCPHeader::EstimateTCPHeaderLength(p);
-	cerr << "estimated header len="<<tcphlen<<"\n";
-	p.ExtractHeaderFromPayload<TCPHeader>(tcphlen);
-	IPHeader ipl=p.FindHeader(Headers::IPHeader);
-	TCPHeader tcph=p.FindHeader(Headers::TCPHeader);
+        Packet p;
+        MinetReceive(mux,p);
+        unsigned tcphlen=TCPHeader::EstimateTCPHeaderLength(p);
+        cerr << "estimated header len="<<tcphlen<<"\n";
+        p.ExtractHeaderFromPayload<TCPHeader>(tcphlen);
+        IPHeader iph=p.FindHeader(Headers::IPHeader);
+        TCPHeader tcph=p.FindHeader(Headers::TCPHeader);
 
-	cerr << "TCP Packet: IP Header is "<<ipl<<" and ";
-	cerr << "TCP Header is "<<tcph << " and ";
+        cerr << "TCP Packet: IP Header is "<<iph<<" and ";
+        cerr << "TCP Header is "<<tcph << " and ";
 
-	cerr << "Checksum is " << (tcph.IsCorrectChecksum(p) ? "VALID" : "INVALID");
-	
+        cerr << "Checksum is " << (tcph.IsCorrectChecksum(p) ? "VALID" : "INVALID");
+
+        Connection c;
+        iph.GetDestIP(c.src);
+        iph.GetSourceIP(c.dest);
+        iph.GetProtocol(c.protocol);
+        tcph.GetDestPort(c.srcport);
+        tcph.GetSourcePort(c.destport);
+        ConnectionList<TCPState>::iterator cs = clist.FindMatching(c);
+
+        if (cs!=clist.end())
+        {
+          
+          
+
+
+
+        } else {
+          cerr << "Could not find matching connection" << endl;
+        }
       }
-      //  Data from the Sockets layer above  //
+        
+        //  Data from the Sockets layer above  //
       if (event.handle==sock) {
-	SockRequestResponse s;
-	MinetReceive(sock,s);
-	cerr << "Received Socket Request:" << s << endl;
+        SockRequestResponse s;
+        MinetReceive(sock,s);
+        cerr << "Received Socket Request:" << s << endl;
+
+        switch (s.type) {
+          case CONNECT:
+          case ACCEPT:
+          { // ignored, send OK response
+            SockRequestResponse repl;
+            repl.type=STATUS;
+            repl.connection=s.connection;
+            // buffer is zero bytes
+            repl.bytes=0;
+            repl.error=EOK;
+            MinetSend(sock,repl);
+          }
+          case WRITE:
+
+          break;
+          case FORWARD:
+
+          break;
+          case CLOSE:
+
+          break;
+          case STATUS:
+          break;
+          default:
+          {
+          }
+        }
       }
     }
   }
+
   return 0;
 }
