@@ -57,6 +57,8 @@ int main(int argc, char *argv[])
       cerr << "3" << endl;
         //  Data from the IP layer below  //
       if (event.handle==mux) {
+        cerr << "4-mux" << endl;
+
         Packet p;
         MinetReceive(mux,p);
         unsigned tcphlen=TCPHeader::EstimateTCPHeaderLength(p);
@@ -76,15 +78,36 @@ int main(int argc, char *argv[])
         iph.GetProtocol(c.protocol);
         tcph.GetDestPort(c.srcport);
         tcph.GetSourcePort(c.destport);
+
+        unsigned char flag;
+        tcph.GetFlags(flag); 
+
         ConnectionList<TCPState>::iterator cs = clist.FindMatching(c);
+
+        //hard-coding to test mux stuff without sock implemented
+        TCPState hardCodedState(1000,LISTEN,2);
+        ConnectionToStateMapping<TCPState> hardCodedConn(c, Time(5), hardCodedState, true);
+        clist.push_back(hardCodedConn);
+
 
         if (cs!=clist.end())
         {
-          
-          
+          if (tcph.IsCorrectChecksum(p))
+          {
+            //corrupt packet
+          } else {
+            switch (cs->state.GetState()) {
+              case LISTEN:
+                if (IS_SYN(flag))
+                {
 
+                }
+              break;
+              default:
 
-
+              break;
+            }
+          }
         } else {
           cerr << "Could not find matching connection" << endl;
         }
@@ -92,35 +115,128 @@ int main(int argc, char *argv[])
         
         //  Data from the Sockets layer above  //
       if (event.handle==sock) {
-        SockRequestResponse s;
-        MinetReceive(sock,s);
-        cerr << "Received Socket Request:" << s << endl;
+        cerr << "4-sock" << endl;
 
-        switch (s.type) {
+        SockRequestResponse req;
+        MinetReceive(sock,req);
+        cerr << "Received Socket Request:" << req << endl;
+
+        switch (req.type) {
           case CONNECT:
-          case ACCEPT:
-          { // ignored, send OK response
+          {
+            ConnectionList<TCPState>::iterator cs = clist.FindMatching(req.connection);
+            if (cs!=clist.end()) {
+              ConnectionToStateMapping<TCPState> m;
+              m.connection=req.connection;
+              clist.push_back(m);
+            }
+
             SockRequestResponse repl;
             repl.type=STATUS;
-            repl.connection=s.connection;
+            repl.connection=req.connection;
+            repl.bytes=0;
+            repl.error=EOK;
+            MinetSend(sock,repl);
+
+            SockRequestResponse write;
+            write.type=WRITE;
+            write.connection = req.connection;
+            write.bytes = 0;
+            write.error = EOK;
+
+            MinetSend(sock,write);
+          }
+          break;
+          case ACCEPT:
+          {//passive open
+            ConnectionToStateMapping<TCPState> m;
+            m.connection=req.connection;
+            clist.push_back(m);
+
+            SockRequestResponse repl;
+            repl.type=STATUS;
+            repl.connection=req.connection;
+            repl.bytes=0;
+            repl.error=EOK;
+
+            MinetSend(sock,repl);
+          }
+          break;
+          case WRITE:
+          {
+            ConnectionList<TCPState>::iterator cs = clist.FindMatching(req.connection);
+            SockRequestResponse repl;
+            repl.connection=req.connection;
+            repl.type=STATUS;
+            if (cs==clist.end()) {
+              repl.error=ENOMATCH;
+              cout << clist << endl;
+            } else {
+              unsigned bytes = MIN_MACRO(IP_PACKET_MAX_LENGTH-TCP_HEADER_MAX_LENGTH, req.data.GetSize());
+              // create the payload of the packet
+              Packet p(req.data.ExtractFront(bytes));
+              // Make the IP header first since we need it to do the tcp checksum
+              IPHeader ih;
+              ih.SetProtocol(IP_PROTO_TCP);
+              ih.SetSourceIP(req.connection.src);
+              ih.SetDestIP(req.connection.dest);
+              ih.SetTotalLength(bytes+TCP_HEADER_MAX_LENGTH+IP_HEADER_BASE_LENGTH);
+              // push it onto the packet
+              p.PushFrontHeader(ih);
+              // Now build the TCP header
+              TCPHeader th;
+              th.SetSourcePort(req.connection.srcport,p);
+              th.SetDestPort(req.connection.destport,p);
+              //th.Set
+              //th.SetLength(TCP_HEADER_MAX_LENGTH+bytes,p);
+              // Now we want to have the tcp header BEHIND the IP header
+              cout << p << endl;
+              p.PushBackHeader(th);
+              MinetSend(mux,p);
+              cout << 5 << endl;
+              repl.bytes=bytes;
+              repl.error=EOK;
+            }
+
+            MinetSend(sock,repl);            
+          }
+          break;
+          case FORWARD:
+          {// ignored, send OK response
+            SockRequestResponse repl;
+            repl.type=STATUS;
+            repl.connection=req.connection;
             // buffer is zero bytes
             repl.bytes=0;
             repl.error=EOK;
             MinetSend(sock,repl);
           }
-          case WRITE:
-
-          break;
-          case FORWARD:
-
           break;
           case CLOSE:
-
+          {
+            ConnectionList<TCPState>::iterator cs = clist.FindMatching(req.connection);
+            SockRequestResponse repl;
+            repl.connection=req.connection;
+            repl.type=STATUS;
+            cout << 6 << endl;
+            if (cs==clist.end()) {
+              repl.error=ENOMATCH;
+            } else {
+              repl.error=EOK;
+              clist.erase(cs);
+            }
+            MinetSend(sock,repl);
+            cout << 7 << endl;
+          }
           break;
           case STATUS:
           break;
           default:
           {
+            SockRequestResponse repl;
+            repl.type=STATUS;
+            repl.error=EWHAT;
+            MinetSend(sock,repl);
           }
         }
       }
