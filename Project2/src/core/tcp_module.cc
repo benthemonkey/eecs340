@@ -85,9 +85,9 @@ int main(int argc, char *argv[])
         ConnectionList<TCPState>::iterator cs = clist.FindMatching(c);
 
         //hard-coding to test mux stuff without sock implemented
-        TCPState hardCodedState(1000,LISTEN,2);
-        ConnectionToStateMapping<TCPState> hardCodedConn(c, Time(5), hardCodedState, true);
-        clist.push_back(hardCodedConn);
+        // TCPState hardCodedState(1000,LISTEN,2);
+        // ConnectionToStateMapping<TCPState> hardCodedConn(c, Time(5), hardCodedState, true);
+        // clist.push_back(hardCodedConn);
 
 
         if (cs!=clist.end())
@@ -97,15 +97,72 @@ int main(int argc, char *argv[])
             //corrupt packet
           } else {
             switch (cs->state.GetState()) {
+              case CLOSED:
+
+              break;
               case LISTEN:
+              {
+                //rcv SYN = snd SYN, ACK
                 if (IS_SYN(flag))
                 {
-
+                  
                 }
+                //SEND = snd SYN
+
+                //CLOSE = delete TCB
+
+              }
+              break;
+              case SYN_RCVD:
+              {
+                //CLOSE = snd FIN
+
+                //rcv ACK of SYN = x
+              }
+              break;
+              case  SYN_SENT:
+              {
+                //CLOSE = delete TCB
+
+                //rcv SYN = snd ACK
+
+                //rcv SYN,ACK = snd ACK
+
+              }
+              break;
+              case SYN_SENT1:
+              {
+                //
+              }
+              break;
+              case  ESTABLISHED:
+
+              break;
+              case SEND_DATA:
+
+              break;
+              case CLOSE_WAIT:
+
+              break;
+              case FIN_WAIT1:
+
+              break;
+              case CLOSING:
+
+              break;
+              case LAST_ACK:
+
+              break;
+              case FIN_WAIT2:
+
+              break;
+              case TIME_WAIT:
+
               break;
               default:
+              {
 
-              break;
+              }
             }
           }
         } else {
@@ -123,11 +180,13 @@ int main(int argc, char *argv[])
 
         switch (req.type) {
           case CONNECT:
-          {
+          {//active open
             ConnectionList<TCPState>::iterator cs = clist.FindMatching(req.connection);
             if (cs!=clist.end()) {
-              ConnectionToStateMapping<TCPState> m;
-              m.connection=req.connection;
+              ConnectionToStateMapping<TCPState> m(req.connection, 
+                                                   5, //const Time &t ??,
+                                                   TCPState(1000,LISTEN,2), //const STATE &s(seqNum, state, timerTries) ??
+                                                   false); //const bool &b); ??
               clist.push_back(m);
             }
 
@@ -137,6 +196,40 @@ int main(int argc, char *argv[])
             repl.bytes=0;
             repl.error=EOK;
             MinetSend(sock,repl);
+
+
+
+            // unsigned bytes = MIN_MACRO(IP_PACKET_MAX_LENGTH-TCP_HEADER_MAX_LENGTH, req.data.GetSize());
+            // // create the payload of the packet
+            // Packet p(req.data.ExtractFront(bytes));
+            // // Make the IP header first since we need it to do the tcp checksum
+            // IPHeader ih;
+            // ih.SetProtocol(IP_PROTO_TCP);
+            // ih.SetSourceIP(req.connection.src);
+            // ih.SetDestIP(req.connection.dest);
+            // ih.SetTotalLength(bytes+TCP_HEADER_MAX_LENGTH+IP_HEADER_BASE_LENGTH);
+            // // push it onto the packet
+            // p.PushFrontHeader(ih);
+            // // Now build the TCP header
+            // TCPHeader th;
+            // th.SetSourcePort(req.connection.srcport,p);
+            // th.SetDestPort(req.connection.destport,p);
+            // th.SetSeqNum(100, p);
+            // th.SetAckNum(0,p);
+            // th.SetHeaderLen(TCP_HEADER_MAX_LENGTH,p);
+            
+            // unsigned char flag;
+            // SET_SYN(flag);
+            // th.SetFlags(flag,p);
+            // th.SetWinSize(100,p);
+            
+            // // Now we want to have the tcp header BEHIND the IP header
+            // cout << p << endl;
+            // p.PushBackHeader(th);
+            // MinetSend(mux,p);
+
+
+
 
             SockRequestResponse write;
             write.type=WRITE;
@@ -149,8 +242,10 @@ int main(int argc, char *argv[])
           break;
           case ACCEPT:
           {//passive open
-            ConnectionToStateMapping<TCPState> m;
-            m.connection=req.connection;
+            ConnectionToStateMapping<TCPState> m(req.connection, 
+                                                 5, //const Time &t ??,
+                                                 TCPState(1000,LISTEN,2), //const STATE &s(seqNum, state, timerTries) ??
+                                                 false); //const bool &b); ??
             clist.push_back(m);
 
             SockRequestResponse repl;
@@ -187,6 +282,15 @@ int main(int argc, char *argv[])
               TCPHeader th;
               th.SetSourcePort(req.connection.srcport,p);
               th.SetDestPort(req.connection.destport,p);
+              th.SetSeqNum(100, p);
+              th.SetAckNum(0,p);
+              th.SetHeaderLen(TCP_HEADER_MAX_LENGTH,p);
+
+              unsigned char flag;
+              SET_SYN(flag);
+              th.SetFlags(flag,p);
+              th.SetWinSize(100,p);
+
               //th.Set
               //th.SetLength(TCP_HEADER_MAX_LENGTH+bytes,p);
               // Now we want to have the tcp header BEHIND the IP header
