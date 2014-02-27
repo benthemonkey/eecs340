@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
                 // snd SYN, ACK
                 if (IS_SYN(flag))
                 {
-                  SendPkt(c, SYNACK, currSeqNum, recTCPHead, mux);
+                  currSeqNum = SendPkt(c, SYNACK, currSeqNum, recTCPHead, mux);
                   cs->state.SetState(SYN_RCVD);
                 }
 
@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
                 // ----------  => CLOSED
                 // delete TCB
                 if (IS_FIN(flag) && IS_ACK(flag)) {
-                  cs->state.SetState(CLOSED);
+                  currSeqNum = cs->state.SetState(CLOSED);
                   clist.erase(cs);
                 }
 
@@ -203,7 +203,7 @@ int main(int argc, char *argv[])
                   // snd FIN
                   if (IS_FIN(flag))
                   {
-                    SendPkt(c, FIN, currSeqNum, recTCPHead, mux);
+                    currSeqNum = SendPkt(c, FIN, currSeqNum, recTCPHead, mux);
                     cs->state.SetState(FIN_WAIT1);
                   }
                   // rcv ACK of SYN
@@ -244,7 +244,7 @@ int main(int argc, char *argv[])
                   // -------  => FIN_WAIT1
                   // snd FIN
                   if (IS_ACK(flag)) {
-                    SendPkt(c, FIN, currSeqNum, recTCPHead, mux);
+                    currSeqNum = SendPkt(c, FIN, currSeqNum, recTCPHead, mux);
                     cs->state.SetState(FIN_WAIT1);
                   }
                   // rcv FIN
@@ -252,7 +252,7 @@ int main(int argc, char *argv[])
                   // snd ACK
                   else
                   {
-                    SendPkt(c, ACK, currSeqNum, recTCPHead, mux);
+                    currSeqNum = SendPkt(c, ACK, currSeqNum, recTCPHead, mux);
                     cs->state.SetState(CLOSE_WAIT);
                   }
                   
@@ -270,7 +270,7 @@ int main(int argc, char *argv[])
                 // -------  => LAST_ACK
                 // snd FIN
                 if (IS_FIN(flag) && IS_ACK(flag)) {
-                  SendPkt(c, FIN, currSeqNum, recTCPHead, mux);
+                  currSeqNum = SendPkt(c, FIN, currSeqNum, recTCPHead, mux);
                   cs->state.SetState(LAST_ACK);
                 }
               }
@@ -289,7 +289,7 @@ int main(int argc, char *argv[])
                 // -------  => CLOSING
                 // snd ACK
                 if (IS_FIN(flag)) {
-                  SendPkt(c, ACK, currSeqNum, recTCPHead, mux);
+                  currSeqNum = SendPkt(c, ACK, currSeqNum, recTCPHead, mux);
                   cs->state.SetState(CLOSING);
                 }
               }
@@ -323,7 +323,7 @@ int main(int argc, char *argv[])
                 // -------  => TIME_WAIT
                 // snd ACK
                 if (IS_FIN(flag)) {
-                  SendPkt(c, ACK, currSeqNum, recTCPHead, mux);
+                  currSeqNum = SendPkt(c, ACK, currSeqNum, recTCPHead, mux);
                   cs->state.SetState(TIME_WAIT);
                 }
               }
