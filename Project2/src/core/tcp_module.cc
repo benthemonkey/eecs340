@@ -59,28 +59,28 @@ int main(int argc, char *argv[])
       if (event.handle==mux) {
         cerr << "4-mux" << endl;
 
-        Packet p;
-        MinetReceive(mux,p);
-        unsigned tcphlen=TCPHeader::EstimateTCPHeaderLength(p);
+        Packet receiveP;
+        MinetReceive(mux,receiveP);
+        unsigned tcphlen=TCPHeader::EstimateTCPHeaderLength(receiveP);
         cerr << "estimated header len="<<tcphlen<<"\n";
-        p.ExtractHeaderFromPayload<TCPHeader>(tcphlen);
-        IPHeader iph=p.FindHeader(Headers::IPHeader);
-        TCPHeader tcph=p.FindHeader(Headers::TCPHeader);
+        receiveP.ExtractHeaderFromPayload<TCPHeader>(tcphlen);
+        IPHeader recIPHead=receiveP.FindHeader(Headers::IPHeader);
+        TCPHeader recTCPHead=receiveP.FindHeader(Headers::TCPHeader);
 
-        cerr << "TCP Packet: IP Header is "<<iph<<" and ";
-        cerr << "TCP Header is "<<tcph << " and ";
+        cerr << "TCP Packet: IP Header is "<<recIPHead<<" and ";
+        cerr << "TCP Header is "<<recTCPHead << " and ";
 
-        cerr << "Checksum is " << (tcph.IsCorrectChecksum(p) ? "VALID" : "INVALID");
+        cerr << "Checksum is " << (recTCPHead.IsCorrectChecksum(receiveP) ? "VALID" : "INVALID") << endl;
 
         Connection c;
-        iph.GetDestIP(c.src);
-        iph.GetSourceIP(c.dest);
-        iph.GetProtocol(c.protocol);
-        tcph.GetDestPort(c.srcport);
-        tcph.GetSourcePort(c.destport);
+        recIPHead.GetDestIP(c.src);
+        recIPHead.GetSourceIP(c.dest);
+        recIPHead.GetProtocol(c.protocol);
+        recTCPHead.GetDestPort(c.srcport);
+        recTCPHead.GetSourcePort(c.destport);
 
         unsigned char flag;
-        tcph.GetFlags(flag);
+        recTCPHead.GetFlags(flag);
 
         ConnectionList<TCPState>::iterator cs = clist.FindMatching(c);
 
@@ -89,13 +89,17 @@ int main(int argc, char *argv[])
         // ConnectionToStateMapping<TCPState> hardCodedConn(c, Time(5), hardCodedState, true);
         // clist.push_back(hardCodedConn);
 
-
+        
         if (cs!=clist.end())
         {
-          if (tcph.IsCorrectChecksum(p))
+          cerr << "5" << endl;
+
+          if (!recTCPHead.IsCorrectChecksum(receiveP))
           {
             //corrupt packet
           } else {
+            cerr << "6" << endl;
+
             switch (cs->state.GetState()) {
               case CLOSED:
               // active open
@@ -111,11 +115,46 @@ int main(int argc, char *argv[])
               break;
               case LISTEN:
               {
+                cerr << "7" << endl;
                 // rcv SYN
                 // -------  => SYN_RCVD
                 // snd SYN, ACK
                 if (IS_SYN(flag))
                 {
+                  cerr << "8" << endl;
+
+                  unsigned bytes = 0;//MIN_MACRO(IP_PACKET_MAX_LENGTH-TCP_HEADER_MAX_LENGTH, req.data.GetSize());
+                  // create the payload of the packet
+                  Packet sendP;//(req.data.ExtractFront(bytes));
+                  // Make the IP header first since we need it to do the tcp checksum
+                  IPHeader sendIPHead;
+                  sendIPHead.SetProtocol(IP_PROTO_TCP);
+                  sendIPHead.SetSourceIP(c.src);
+                  sendIPHead.SetDestIP(c.dest);
+                  sendIPHead.SetTotalLength(bytes+TCP_HEADER_MAX_LENGTH+IP_HEADER_BASE_LENGTH);
+                  // push it onto the packet
+                  sendP.PushFrontHeader(sendIPHead);
+                  // Now build the TCP header
+                  TCPHeader sendTCPHead;
+                  sendTCPHead.SetSourcePort(c.srcport,sendP);
+                  sendTCPHead.SetDestPort(c.destport,sendP);
+                  unsigned int nextSeqNum;
+                  recTCPHead.GetSeqNum(nextSeqNum);
+                  sendTCPHead.SetSeqNum(nextSeqNum+1, sendP);
+                  sendTCPHead.SetAckNum(0,sendP);
+                  sendTCPHead.SetHeaderLen(TCP_HEADER_MAX_LENGTH,sendP);
+
+                  unsigned char flag;
+                  SET_SYN(flag);
+                  SET_ACK(flag);
+                  sendTCPHead.SetFlags(flag,sendP);
+                  sendTCPHead.SetWinSize(100,sendP);
+
+                  //sendTCPHead.Set
+                  //sendTCPHead.SetLength(TCP_HEADER_MAX_LENGTH+bytes,sendP);
+                  // Now we want to have the tcp header BEHIND the IP header
+                  sendP.PushBackHeader(sendTCPHead);
+                  MinetSend(mux,sendP);
 
                 }
 
@@ -274,40 +313,6 @@ int main(int argc, char *argv[])
             repl.error=EOK;
             MinetSend(sock,repl);
 
-
-
-            // unsigned bytes = MIN_MACRO(IP_PACKET_MAX_LENGTH-TCP_HEADER_MAX_LENGTH, req.data.GetSize());
-            // // create the payload of the packet
-            // Packet p(req.data.ExtractFront(bytes));
-            // // Make the IP header first since we need it to do the tcp checksum
-            // IPHeader ih;
-            // ih.SetProtocol(IP_PROTO_TCP);
-            // ih.SetSourceIP(req.connection.src);
-            // ih.SetDestIP(req.connection.dest);
-            // ih.SetTotalLength(bytes+TCP_HEADER_MAX_LENGTH+IP_HEADER_BASE_LENGTH);
-            // // push it onto the packet
-            // p.PushFrontHeader(ih);
-            // // Now build the TCP header
-            // TCPHeader th;
-            // th.SetSourcePort(req.connection.srcport,p);
-            // th.SetDestPort(req.connection.destport,p);
-            // th.SetSeqNum(100, p);
-            // th.SetAckNum(0,p);
-            // th.SetHeaderLen(TCP_HEADER_MAX_LENGTH,p);
-
-            // unsigned char flag;
-            // SET_SYN(flag);
-            // th.SetFlags(flag,p);
-            // th.SetWinSize(100,p);
-
-            // // Now we want to have the tcp header BEHIND the IP header
-            // cout << p << endl;
-            // p.PushBackHeader(th);
-            // MinetSend(mux,p);
-
-
-
-
             SockRequestResponse write;
             write.type=WRITE;
             write.connection = req.connection;
@@ -348,33 +353,32 @@ int main(int argc, char *argv[])
               // create the payload of the packet
               Packet p(req.data.ExtractFront(bytes));
               // Make the IP header first since we need it to do the tcp checksum
-              IPHeader ih;
-              ih.SetProtocol(IP_PROTO_TCP);
-              ih.SetSourceIP(req.connection.src);
-              ih.SetDestIP(req.connection.dest);
-              ih.SetTotalLength(bytes+TCP_HEADER_MAX_LENGTH+IP_HEADER_BASE_LENGTH);
+              IPHeader sendIPHead;
+              sendIPHead.SetProtocol(IP_PROTO_TCP);
+              sendIPHead.SetSourceIP(req.connection.src);
+              sendIPHead.SetDestIP(req.connection.dest);
+              sendIPHead.SetTotalLength(bytes+TCP_HEADER_MAX_LENGTH+IP_HEADER_BASE_LENGTH);
               // push it onto the packet
-              p.PushFrontHeader(ih);
+              p.PushFrontHeader(sendIPHead);
               // Now build the TCP header
-              TCPHeader th;
-              th.SetSourcePort(req.connection.srcport,p);
-              th.SetDestPort(req.connection.destport,p);
-              th.SetSeqNum(100, p);
-              th.SetAckNum(0,p);
-              th.SetHeaderLen(TCP_HEADER_MAX_LENGTH,p);
+              TCPHeader sendTCPHead;
+              sendTCPHead.SetSourcePort(req.connection.srcport,p);
+              sendTCPHead.SetDestPort(req.connection.destport,p);
+              sendTCPHead.SetSeqNum(100, p);
+              sendTCPHead.SetAckNum(0,p);
+              sendTCPHead.SetHeaderLen(TCP_HEADER_MAX_LENGTH,p);
 
               unsigned char flag;
               SET_SYN(flag);
-              th.SetFlags(flag,p);
-              th.SetWinSize(100,p);
+              sendTCPHead.SetFlags(flag,p);
+              sendTCPHead.SetWinSize(100,p);
 
-              //th.Set
-              //th.SetLength(TCP_HEADER_MAX_LENGTH+bytes,p);
+              //sendTCPHead.Set
+              //sendTCPHead.SetLength(TCP_HEADER_MAX_LENGTH+bytes,p);
               // Now we want to have the tcp header BEHIND the IP header
-              cout << p << endl;
-              p.PushBackHeader(th);
+              p.PushBackHeader(sendTCPHead);
               MinetSend(mux,p);
-              cout << 5 << endl;
+
               repl.bytes=bytes;
               repl.error=EOK;
             }
