@@ -144,14 +144,11 @@ int main(int argc, char *argv[])
               break;
               case LISTEN:
               {
-                cerr << "7" << endl;
                 // rcv SYN
                 // -------  => SYN_RCVD
                 // snd SYN, ACK
                 if (IS_SYN(flag))
                 {
-                  cerr << "8" << endl;
-
                   unsigned char sendFlag;
                   SET_SYN(sendFlag);
                   SET_ACK(sendFlag);
@@ -171,12 +168,15 @@ int main(int argc, char *argv[])
                 //   CLOSE
                 // ----------  => CLOSED
                 // delete TCB
+                if (IS_FIN(flag) && IS_ACK(flag)) {
+                  cs->state.SetState(CLOSED);
+                  clist.erase(cs);
+                }
 
               }
               break;
               case SYN_RCVD:
               {
-
                 if (IS_ACK(flag))
                 {
                   //  CLOSE
@@ -201,8 +201,6 @@ int main(int argc, char *argv[])
                     cs->state.SetState(ESTABLISHED);
                   }
                 } 
-
-                
               }
               break;
               case  SYN_SENT:
@@ -210,6 +208,16 @@ int main(int argc, char *argv[])
                 //   CLOSE
                 // ----------  => CLOSED
                 // delete TCB
+                if (IS_FIN(flag) && IS_ACK(flag)) {
+                  unsigned char sendFlag;
+                  SET_FIN(sendFlag);
+                  unsigned int recSeqNum;
+                  recTCPHead.GetSeqNum(recSeqNum);
+                  Packet sendP = CreateSendPkt(c, sendFlag, currSeqNum, recSeqNum+1);
+                  MinetSend(mux,sendP);
+
+                  cs->state.SetState(LAST_ACK);
+                }
 
 
                 // rcv SYN
@@ -220,40 +228,52 @@ int main(int argc, char *argv[])
                 // rcv SYN, ACK
                 // ------------  => ESTABLISHED
                 //   snd ACK
-
               }
               break;
               case SYN_SENT1:
               {
-                //
+                
               }
               break;
               case  ESTABLISHED:
               {
-                // rcv FIN
-                // -------  => CLOSE_WAIT
-                // snd ACK
+                
                 if (IS_FIN(flag)) {
-                  unsigned char sendFlag;
-                  SET_ACK(sendFlag);
-                  unsigned int recSeqNum;
-                  recTCPHead.GetSeqNum(recSeqNum);
-                  Packet sendP = CreateSendPkt(c, sendFlag, currSeqNum, recSeqNum+1);
-                  MinetSend(mux,sendP);
+                  //  CLOSE
+                  // -------  => FIN_WAIT1
+                  // snd FIN
+                  if (IS_ACK(flag)) {
+                    unsigned char sendFlag;
+                    SET_FIN(sendFlag);
+                    unsigned int recSeqNum;
+                    recTCPHead.GetSeqNum(recSeqNum);
+                    Packet sendP = CreateSendPkt(c, sendFlag, currSeqNum, recSeqNum+1);
+                    MinetSend(mux,sendP);
 
-                  cs->state.SetState(CLOSE_WAIT);
+                    cs->state.SetState(FIN_WAIT1);
+                  }
+                  // rcv FIN
+                  // -------  => CLOSE_WAIT
+                  // snd ACK
+                  else
+                  {
+                    unsigned char sendFlag;
+                    SET_ACK(sendFlag);
+                    unsigned int recSeqNum;
+                    recTCPHead.GetSeqNum(recSeqNum);
+                    Packet sendP = CreateSendPkt(c, sendFlag, currSeqNum, recSeqNum+1);
+                    MinetSend(mux,sendP);
+
+                    cs->state.SetState(CLOSE_WAIT);
+                  }
+                  
                 }
-
-
-                //  CLOSE
-                // -------  => FIN_WAIT1
-                // snd FIN
               }
-
-
               break;
               case SEND_DATA:
+              {
 
+              }
               break;
               case CLOSE_WAIT:
               {
@@ -278,11 +298,23 @@ int main(int argc, char *argv[])
                 // rcv ACK of FIN
                 // --------------  => FIN_WAIT2
                 //       x
-
+                if (IS_ACK(flag)) {
+                  cs->state.SetState(FIN_WAIT2);
+                }
 
                 // rcv FIN
                 // -------  => CLOSING
                 // snd ACK
+                if (IS_FIN(flag)) {
+                  unsigned char sendFlag;
+                  SET_ACK(sendFlag);
+                  unsigned int recSeqNum;
+                  recTCPHead.GetSeqNum(recSeqNum);
+                  Packet sendP = CreateSendPkt(c, sendFlag, currSeqNum, recSeqNum+1);
+                  MinetSend(mux,sendP);
+
+                  cs->state.SetState(CLOSING);
+                }
               }
 
               break;
@@ -291,6 +323,9 @@ int main(int argc, char *argv[])
                 // rcv ACK of FIN
                 // --------------  => TIME_WAIT
                 //       x
+                if (IS_ACK(flag)) {
+                  cs->state.SetState(TIME_WAIT);
+                }
               }
 
               break;
@@ -310,6 +345,16 @@ int main(int argc, char *argv[])
                 // rcv FIN
                 // -------  => TIME_WAIT
                 // snd ACK
+                if (IS_FIN(flag)) {
+                  unsigned char sendFlag;
+                  SET_ACK(sendFlag);
+                  unsigned int recSeqNum;
+                  recTCPHead.GetSeqNum(recSeqNum);
+                  Packet sendP = CreateSendPkt(c, sendFlag, currSeqNum, recSeqNum+1);
+                  MinetSend(mux,sendP);
+
+                  cs->state.SetState(TIME_WAIT);
+                }
               }
 
               break;
