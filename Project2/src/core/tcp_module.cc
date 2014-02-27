@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
                 // ----------  => CLOSED
                 // delete TCB
                 if (IS_FIN(flag) && IS_ACK(flag)) {
-                  currSeqNum = cs->state.SetState(CLOSED);
+                  cs->state.SetState(CLOSED);
                   clist.erase(cs);
                 }
 
