@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
         tcph.GetSourcePort(c.destport);
 
         unsigned char flag;
-        tcph.GetFlags(flag); 
+        tcph.GetFlags(flag);
 
         ConnectionList<TCPState>::iterator cs = clist.FindMatching(c);
 
@@ -98,35 +98,66 @@ int main(int argc, char *argv[])
           } else {
             switch (cs->state.GetState()) {
               case CLOSED:
+              // active open
+              // -----------  => SYN_SENT
+              // Create TCB
+              //  snd SYN
+
+
+              // passive open
+              // ------------  => LISTEN
+              //  create TCB
 
               break;
               case LISTEN:
               {
-                //rcv SYN = snd SYN, ACK
+                // rcv SYN
+                // -------  => SYN_RCVD
+                // snd SYN, ACK
                 if (IS_SYN(flag))
                 {
-                  
-                }
-                //SEND = snd SYN
 
-                //CLOSE = delete TCB
+                }
+
+                //   SEND
+                // -------  => SYN_SENT
+                // snd SYN
+
+
+                //   CLOSE
+                // ----------  => CLOSED
+                // delete TCB
 
               }
               break;
               case SYN_RCVD:
               {
-                //CLOSE = snd FIN
+                // rcv ACK of SYN
+                // --------------  => ESTABLISHED
+                //       x
 
-                //rcv ACK of SYN = x
+
+                //  CLOSE
+                // -------  => FIN_WAIT1
+                // snd FIN
+
               }
               break;
               case  SYN_SENT:
               {
-                //CLOSE = delete TCB
+                //   CLOSE
+                // ----------  => CLOSED
+                // delete TCB
 
-                //rcv SYN = snd ACK
 
-                //rcv SYN,ACK = snd ACK
+                // rcv SYN
+                // -------  => SYN_RCVD
+                // snd ACK
+
+
+                // rcv SYN, ACK
+                // ------------  => ESTABLISHED
+                //   snd ACK
 
               }
               break;
@@ -136,27 +167,73 @@ int main(int argc, char *argv[])
               }
               break;
               case  ESTABLISHED:
+              {
+                // rcv FIN
+                // -------  => CLOSE_WAIT
+                // snd ACK
+
+
+                //  CLOSE
+                // -------  => FIN_WAIT1
+                // snd FIN
+              }
+
 
               break;
               case SEND_DATA:
 
               break;
               case CLOSE_WAIT:
+              {
+                //  CLOSE
+                // -------  => LAST_ACK
+                // snd FIN
+              }
 
               break;
               case FIN_WAIT1:
+              {
+                // rcv ACK of FIN
+                // --------------  => FIN_WAIT2
+                //       x
+
+
+                // rcv FIN
+                // -------  => CLOSING
+                // snd ACK
+              }
 
               break;
               case CLOSING:
+              {
+                // rcv ACK of FIN
+                // --------------  => TIME_WAIT
+                //       x
+              }
 
               break;
               case LAST_ACK:
+              {
+                // rcv ACK of FIN
+                // --------------  => CLOSED
+                //       x
+              }
 
               break;
               case FIN_WAIT2:
+              {
+                // rcv FIN
+                // -------  => TIME_WAIT
+                // snd ACK
+              }
 
               break;
               case TIME_WAIT:
+              {
+                // timeout=2MSL
+                // ------------  => CLOSED
+                //  delete TCB
+              }
 
               break;
               default:
@@ -169,7 +246,7 @@ int main(int argc, char *argv[])
           cerr << "Could not find matching connection" << endl;
         }
       }
-        
+
         //  Data from the Sockets layer above  //
       if (event.handle==sock) {
         cerr << "4-sock" << endl;
@@ -183,7 +260,7 @@ int main(int argc, char *argv[])
           {//active open
             ConnectionList<TCPState>::iterator cs = clist.FindMatching(req.connection);
             if (cs!=clist.end()) {
-              ConnectionToStateMapping<TCPState> m(req.connection, 
+              ConnectionToStateMapping<TCPState> m(req.connection,
                                                    5, //const Time &t ??,
                                                    TCPState(1000,LISTEN,2), //const STATE &s(seqNum, state, timerTries) ??
                                                    false); //const bool &b); ??
@@ -217,12 +294,12 @@ int main(int argc, char *argv[])
             // th.SetSeqNum(100, p);
             // th.SetAckNum(0,p);
             // th.SetHeaderLen(TCP_HEADER_MAX_LENGTH,p);
-            
+
             // unsigned char flag;
             // SET_SYN(flag);
             // th.SetFlags(flag,p);
             // th.SetWinSize(100,p);
-            
+
             // // Now we want to have the tcp header BEHIND the IP header
             // cout << p << endl;
             // p.PushBackHeader(th);
@@ -242,7 +319,7 @@ int main(int argc, char *argv[])
           break;
           case ACCEPT:
           {//passive open
-            ConnectionToStateMapping<TCPState> m(req.connection, 
+            ConnectionToStateMapping<TCPState> m(req.connection,
                                                  5, //const Time &t ??,
                                                  TCPState(1000,LISTEN,2), //const STATE &s(seqNum, state, timerTries) ??
                                                  false); //const bool &b); ??
@@ -302,7 +379,7 @@ int main(int argc, char *argv[])
               repl.error=EOK;
             }
 
-            MinetSend(sock,repl);            
+            MinetSend(sock,repl);
           }
           break;
           case FORWARD:
