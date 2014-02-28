@@ -196,8 +196,10 @@ int main(int argc, char *argv[])
         recTCPHead.GetFlags(flag);
 
         unsigned int ack;
+        bool goodLastAcked = false;
         if (IS_ACK(flag)) {
           recTCPHead.GetAckNum(ack);
+          goodLastAcked = cs->state.SetLastAcked(ack);
         }
 
         ConnectionList<TCPState>::iterator cs = clist.FindMatching(c);
@@ -387,7 +389,7 @@ int main(int argc, char *argv[])
                 // --------------  => CLOSED
                 //       x
 
-                if (IS_ACK(flag) && cs->state.SetLastAcked(ack)) {
+                if (IS_ACK(flag)) {
                   cerr << "rcv ACK => CLOSED" << endl;
                   cs->state.SetState(CLOSED);
                 }
