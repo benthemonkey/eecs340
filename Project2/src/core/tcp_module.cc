@@ -548,8 +548,6 @@ int main(int argc, char *argv[])
                 sent = cs->state.GetLastSent();
 
               unsigned size = bufsize - sent + acked;
-              unsigned char flags;
-
 
               if (size > 0) {
                 unsigned bytes = MIN_MACRO(IP_PACKET_MAX_LENGTH-TCP_HEADER_MAX_LENGTH, size);
@@ -567,21 +565,21 @@ int main(int argc, char *argv[])
                 TCPHeader sendTCPHead;
                 sendTCPHead.SetSourcePort(req.connection.srcport,p);
                 sendTCPHead.SetDestPort(req.connection.destport,p);
-                sendTCPHead.SetSeqNum(100, p);
+                sendTCPHead.SetSeqNum(currSeqNum, p);
                 sendTCPHead.SetAckNum(0,p);
                 sendTCPHead.SetHeaderLen(TCP_HEADER_MAX_LENGTH,p);
+
+                unsigned char flag;
+                SET_SYN(flag);
+                sendTCPHead.SetFlags(flag,p);
+                sendTCPHead.SetWinSize(100,p);
+
+                //sendTCPHead.Set
+                //sendTCPHead.SetLength(TCP_HEADER_MAX_LENGTH+bytes,p);
+                // Now we want to have the tcp header BEHIND the IP header
+                p.PushBackHeader(sendTCPHead);
+                MinetSend(mux,p);
               }
-
-              // unsigned char flag;
-              // SET_SYN(flag);
-              // sendTCPHead.SetFlags(flag,p);
-              // sendTCPHead.SetWinSize(100,p);
-
-              // //sendTCPHead.Set
-              // //sendTCPHead.SetLength(TCP_HEADER_MAX_LENGTH+bytes,p);
-              // // Now we want to have the tcp header BEHIND the IP header
-              // p.PushBackHeader(sendTCPHead);
-              // MinetSend(mux,p);
 
               repl.bytes=req.data.GetSize();//bytes;
               repl.error=EOK;
