@@ -195,6 +195,11 @@ int main(int argc, char *argv[])
         unsigned char flag;
         recTCPHead.GetFlags(flag);
 
+        unsigned int ack;
+        if (IS_ACK(flag)) {
+          recTCPHead.GetAckNum(ack);
+        }
+
         ConnectionList<TCPState>::iterator cs = clist.FindMatching(c);
 
         //hard-coding to test mux stuff without sock implemented
@@ -381,7 +386,8 @@ int main(int argc, char *argv[])
                 // rcv ACK of FIN
                 // --------------  => CLOSED
                 //       x
-                if (IS_ACK(flag)) {
+
+                if (IS_ACK(flag) && cs->state.SetLastAcked(ack)) {
                   cerr << "rcv ACK => CLOSED" << endl;
                   cs->state.SetState(CLOSED);
                 }
