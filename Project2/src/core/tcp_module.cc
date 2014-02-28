@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
-
+#include <list>
 
 #include <iostream>
 
@@ -17,14 +17,11 @@
 #include "tcpstate.h"
 #include "packet_queue.h"
 
-using std::cout;
-using std::endl;
-using std::cerr;
-using std::string;
+using namespace std;
 
 enum flagToSend { ACK, FIN, SYNACK, SYN };
 
-void SendPkt(PacketQueue pktQ, Connection c, unsigned int sendFlagType, unsigned int seqNum, unsigned int ackNum, MinetHandle mux, Buffer data) {
+unsigned int SendPkt(list<Packet> pktQ, Connection c, unsigned int sendFlagType, unsigned int seqNum, unsigned int ackNum, MinetHandle mux, Buffer data) {
 
   unsigned bytes = MIN_MACRO(IP_PACKET_MAX_LENGTH-TCP_HEADER_BASE_LENGTH, data.GetSize());
   // create the payload of the packet
@@ -73,13 +70,13 @@ void SendPkt(PacketQueue pktQ, Connection c, unsigned int sendFlagType, unsigned
   sendP.PushBackHeader(sendTCPHead);
 
   MinetSend(mux, sendP);
-  pktQ.PushPacket(sendP);
+  pktQ.push_back(sendP);
 
-  //return sendP;
+  return seqNum + 1;
 }
 
-void SendBlankPkt(PacketQueue pktQ, Connection c, unsigned int sendFlagType, unsigned int seqNum, unsigned int ackNum, MinetHandle mux) {
-  SendPkt(pktQ, c, sendFlagType, seqNum, ackNum, mux, Buffer(NULL,0));
+unsigned int SendBlankPkt(list<Packet> pktQ, Connection c, unsigned int sendFlagType, unsigned int seqNum, unsigned int ackNum, MinetHandle mux) {
+  return SendPkt(pktQ, c, sendFlagType, seqNum, ackNum, mux, Buffer(NULL,0));
 }
 
 int main(int argc, char *argv[])
@@ -88,7 +85,8 @@ int main(int argc, char *argv[])
   unsigned int currSeqNum = 1;
 
   ConnectionList<TCPState> clist;
-  PacketQueue pktQ;
+  list<Packet> pktQ;
+  unsigned int lastAcked;
 
   //MinetSend(mux, packet);
 
@@ -216,6 +214,7 @@ int main(int argc, char *argv[])
             //corrupt packet
           } else {
             //cerr << "State:" << cs->state.GetState() << endl;
+            cs->state.SetLastAcked(ackNum);
 
             if (cs->state.GetState() != TIME_WAIT) {
               cs->state.SetTimerTries(3);
@@ -238,7 +237,7 @@ int main(int argc, char *argv[])
                 if (IS_SYN(flag))
                 {
                   cerr << "rcv SYN, snd SYNACK => SYN_RCVD" << endl;
-                  SendBlankPkt(pktQ, c, SYNACK, currSeqNum, ackNum, mux);
+                  currSeqNum = SendBlankPkt(pktQ, c, SYNACK, currSeqNum, ackNum, mux);
                   cs->state.SetState(SYN_RCVD);
                 }
               }
@@ -267,7 +266,7 @@ int main(int argc, char *argv[])
                     // ------------  => ESTABLISHED
                     //   snd ACK
                     cerr << "rcv SYNACK, snd ACK => ESTABLISHED" << endl;
-                    SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
+                    currSeqNum = SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
                     cs->state.SetState(ESTABLISHED);
                     cs->state.SetLastAcked(ackNum);
                   } else {
@@ -275,7 +274,7 @@ int main(int argc, char *argv[])
                     // -------  => SYN_RCVD
                     // snd ACK
                     cerr << "rcv SYN, snd ACK => SYN_RCVD" << endl;
-                    SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
+                    currSeqNum = SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
                     cs->state.SetState(SYN_RCVD);
                   }
                 }
@@ -295,7 +294,7 @@ int main(int argc, char *argv[])
                 // snd ACK
                 if (IS_FIN(flag)) {
                   cerr << "rcv FIN, snd ACK => CLOSE_WAIT" << endl;
-                  SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
+                  currSeqNum = SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
                   cs->state.SetState(CLOSE_WAIT);
 
                   //========================
@@ -305,7 +304,7 @@ int main(int argc, char *argv[])
                   //!!!!!!!!!!!!!!!!!!!!!!!!
                   //========================
                   currSeqNum--;
-                  SendBlankPkt(pktQ, c, FIN, currSeqNum, ackNum, mux);
+                  currSeqNum = SendBlankPkt(pktQ, c, FIN, currSeqNum, ackNum, mux);
                   cs->state.SetState(TIME_WAIT);
                   cerr << "jklol => TIME_WAIT" << endl;
                 }
@@ -322,7 +321,7 @@ int main(int argc, char *argv[])
 
                 if (IS_FIN(flag) && IS_ACK(flag)) {
                   cerr << "rcv FINACK, snd FIN => LAST_ACK" << endl;
-                  SendBlankPkt(pktQ, c, FIN, currSeqNum, ackNum, mux);
+                  currSeqNum = SendBlankPkt(pktQ, c, FIN, currSeqNum, ackNum, mux);
                   cs->state.SetState(LAST_ACK);
                   cs->state.SetTimerTries(1);
                 }
@@ -345,7 +344,7 @@ int main(int argc, char *argv[])
                 // snd ACK
                 if (IS_FIN(flag)) {
                   cerr << "rcv FIN, snd ACK => CLOSING" << endl;
-                  SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
+                  currSeqNum = SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
                   cs->state.SetState(CLOSING);
                 }
               }
@@ -359,7 +358,7 @@ int main(int argc, char *argv[])
                 // snd ACK
                 if (IS_FIN(flag)) {
                   cerr << "rcv FIN => TIME_WAIT" << endl;
-                  SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
+                  currSeqNum = SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
                   cs->state.SetState(TIME_WAIT);
                   cs->state.SetTimerTries(2);
                 }
@@ -439,7 +438,7 @@ int main(int argc, char *argv[])
                                                    true); //const bool &b); ??
             clist.push_back(m);
 
-            SendBlankPkt(pktQ, req.connection, SYN, currSeqNum, 0, mux);
+            currSeqNum = SendBlankPkt(pktQ, req.connection, SYN, currSeqNum, 0, mux);
             //}
 
 
@@ -502,7 +501,7 @@ int main(int argc, char *argv[])
               if (cs->state.GetState() == ESTABLISHED)
               {
                 unsigned int ackNum = 0;//cs->state.GetLastAcked();
-                SendBlankPkt(pktQ, req.connection, SYN, currSeqNum, ackNum, mux);//, req.data);
+                currSeqNum = SendBlankPkt(pktQ, req.connection, SYN, currSeqNum, ackNum, mux);//, req.data);
 
                 cs->state.SetState(SYN_SENT);
               }
@@ -589,7 +588,7 @@ int main(int argc, char *argv[])
                   // -------  => FIN_WAIT1
                   // snd FIN
                   cerr << "CLOSE, snd FIN => FIN_WAIT1" << endl;
-                  SendBlankPkt(pktQ, req.connection, FIN, currSeqNum, 0, mux);
+                  currSeqNum = SendBlankPkt(pktQ, req.connection, FIN, currSeqNum, 0, mux);
                   cs->state.SetState(FIN_WAIT1);
                 }
                 break;
@@ -599,7 +598,7 @@ int main(int argc, char *argv[])
                   // -------  => LAST_ACK
                   // snd FIN
                   cerr << "CLOSE, snd FIN => LAST_ACK" << endl;
-                  SendBlankPkt(pktQ, req.connection, FIN, currSeqNum, 0, mux);
+                  currSeqNum = SendBlankPkt(pktQ, req.connection, FIN, currSeqNum, 0, mux);
                   cs->state.SetState(LAST_ACK);
                 }
                 break;
