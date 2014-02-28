@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
         } else if (i->state.GetState() == CLOSED) {
           cerr << "CLOSED: for now switching to LISTEN" << endl;
           i->state.SetState(LISTEN);
-          i->state.bTmrActive = false;
+          i->bTmrActive = false;
         }
       }
 
@@ -570,6 +570,7 @@ int main(int argc, char *argv[])
                 sendTCPHead.SetSeqNum(100, p);
                 sendTCPHead.SetAckNum(0,p);
                 sendTCPHead.SetHeaderLen(TCP_HEADER_MAX_LENGTH,p);
+              }
 
               // unsigned char flag;
               // SET_SYN(flag);
