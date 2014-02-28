@@ -104,7 +104,7 @@ int main(int argc, char *argv[])
   MinetSendToMonitor(MinetMonitoringEvent("tcp_module handling TCP traffic"));
 
   MinetEvent event;
-  Time timeout(2);
+  Time timeout(1);
   cerr << "entering while loop" << endl;
   while (MinetGetNextEvent(event, timeout)==0) {
     //cerr << "2" << endl;
@@ -112,30 +112,43 @@ int main(int argc, char *argv[])
 
     if (event.eventtype == MinetEvent::Timeout) {
       for (ConnectionList<TCPState>::iterator i = clist.begin(); i != clist.end(); ++i) {
+        bool expired = false;
+
+        if (i->bTmrActive) {
+          expired = i->state.ExpireTimerTries();
+        };
+
         switch (i->state.GetState()) {
+          case SYN_RCVD:
+          {
+            cerr << "SYN_RCVD: ";
+          }
+          break;
+          case SYN_SENT:
+          {
+            cerr << "SYN_SENT: ";
+          }
+          break;
           case LAST_ACK:
           {
-            if (i->state.ExpireTimerTries()) {
-              cerr << "LAST_ACK: timed out => CLOSED" << endl;
-              i->state.SetState(CLOSED);
-            }
+            cerr << "LAST_ACK: ";
           }
           case TIME_WAIT:
           {
-            if (i->state.ExpireTimerTries()) {
-              cerr << "TIME_WAIT: timed out => CLOSED" << endl;
-              i->state.SetState(CLOSED);
-            }
+            cerr << "TIME_WAIT: ";
           }
           break;
-          case CLOSED:
-          {
-            // cerr << "CLOSED: deleting from clist" << endl;
-            // clist.erase(i);
-            // i--;
-            cerr << "CLOSED: for now switching to LISTEN" << endl;
-            i->state.SetState(LISTEN);
-          }
+        }
+
+        if (expired) {
+          cerr << "timed out => CLOSED" << endl;
+          i->state.SetState(CLOSED);
+          i->bTmrActive = false;
+        }
+
+        if (i->state.GetState() == CLOSED) {
+          cerr << "CLOSED: for now switching to LISTEN" << endl;
+          i->state.SetState(LISTEN);
         }
       }
 
@@ -193,11 +206,13 @@ int main(int argc, char *argv[])
           } else {
             //cerr << "State:" << cs->state.GetState() << endl;
 
+            cs->state.SetTimerTries(3);
+            cs->bTmrActive = true;
+
             switch (cs->state.GetState()) {
               case CLOSED:
               {
                 cerr << "CLOSED: ";
-
               }
 
               break;
@@ -213,8 +228,6 @@ int main(int argc, char *argv[])
                   currSeqNum = SendBlankPkt(c, SYNACK, currSeqNum, ackNum, mux);
                   cs->state.SetState(SYN_RCVD);
                 }
-
-
               }
               break;
               case SYN_RCVD:
@@ -412,8 +425,8 @@ int main(int argc, char *argv[])
             cerr << "active open, snd SYN => SYN_SENT" << endl;
             ConnectionToStateMapping<TCPState> m(req.connection,
                                                    initialTimeout, //const Time &t ??,
-                                                   TCPState(currSeqNum,SYN_SENT,initialTimerTries), //const STATE &s(seqNum, state, timerTries) ??
-                                                   false); //const bool &b); ??
+                                                   TCPState(currSeqNum, SYN_SENT, initialTimerTries), //const STATE &s(seqNum, state, timerTries) ??
+                                                   true); //const bool &b); ??
             clist.push_back(m);
             currSeqNum = SendBlankPkt(req.connection, SYN, currSeqNum, 0, mux);
 
@@ -430,13 +443,13 @@ int main(int argc, char *argv[])
 
 
 
-            SockRequestResponse write;
-            write.type=WRITE;
-            write.connection = req.connection;
-            write.bytes = 0;
-            write.error = EOK;
+            // SockRequestResponse write;
+            // write.type=WRITE;
+            // write.connection = req.connection;
+            // write.bytes = 0;
+            // write.error = EOK;
 
-            MinetSend(sock,write);
+            // MinetSend(sock,write);
           }
           break;
           case ACCEPT:
