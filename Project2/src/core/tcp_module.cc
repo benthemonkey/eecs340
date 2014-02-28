@@ -193,6 +193,7 @@ int main(int argc, char *argv[])
         recTCPHead.GetFlags(flag);
 
         ConnectionList<TCPState>::iterator cs = clist.FindMatching(c);
+        cs->state.SetLastRecvd(recSeqNum);
 
         unsigned int ack;
         bool goodLastAcked = false;
@@ -297,17 +298,6 @@ int main(int argc, char *argv[])
                   cerr << "rcv FIN, snd ACK => CLOSE_WAIT" << endl;
                   currSeqNum = SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
                   cs->state.SetState(CLOSE_WAIT);
-
-                  //========================
-                  //!!!!!!!!!!!!!!!!!!!!!!!!
-                  // We're skipping CLOSE_WAIT and going
-                  // straight to LISTEN
-                  //!!!!!!!!!!!!!!!!!!!!!!!!
-                  //========================
-                  currSeqNum--;
-                  currSeqNum = SendBlankPkt(pktQ, c, FIN, currSeqNum, ackNum, mux);
-                  cs->state.SetState(TIME_WAIT);
-                  cerr << "jklol => TIME_WAIT" << endl;
                 }
               }
               break;
@@ -320,7 +310,7 @@ int main(int argc, char *argv[])
               {
                 cerr << "CLOSE_WAIT: ";
 
-                if (IS_FIN(flag) && IS_ACK(flag)) {
+                if (IS_FIN(flag)) {
                   cerr << "rcv FINACK, snd FIN => LAST_ACK" << endl;
                   currSeqNum = SendBlankPkt(pktQ, c, FIN, currSeqNum, ackNum, mux);
                   cs->state.SetState(LAST_ACK);
@@ -332,22 +322,26 @@ int main(int argc, char *argv[])
               case FIN_WAIT1: //see page 38 of TCP doc
               {
                 cerr << "FIN_WAIT1: ";
-                // rcv ACK of FIN
-                // --------------  => FIN_WAIT2
-                //       x
-                if (IS_ACK(flag)) {
+                // rcv FIN
+                // -------  => CLOSING
+                // snd ACK
+                if (IS_FIN(flag) && !IS_ACK(flag)) {
+                  cerr << "rcv FIN, snd ACK => CLOSING" << endl;
+                  currSeqNum = SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
+                  cs->state.SetState(CLOSING);
+                } else if (IS_FIN(flag) && IS_ACK(flag)) {
+                  if (goodLastAcked) {
+                    currSeqNum = SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
+                    cs->state.SetState(TIME_WAIT);
+                  }
+                } else if (IS_ACK(flag) && goodLastAcked) {
                   cerr << "rcv ACK => FIN_WAIT2" << endl;
                   cs->state.SetState(FIN_WAIT2);
                 }
 
-                // rcv FIN
-                // -------  => CLOSING
-                // snd ACK
-                if (IS_FIN(flag)) {
-                  cerr << "rcv FIN, snd ACK => CLOSING" << endl;
-                  currSeqNum = SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
-                  cs->state.SetState(CLOSING);
-                }
+                // rcv ACK of FIN
+                // --------------  => FIN_WAIT2
+                //       x
               }
 
               break;
@@ -372,10 +366,12 @@ int main(int argc, char *argv[])
                 // rcv ACK of FIN
                 // --------------  => TIME_WAIT
                 //       x
-                if (IS_ACK(flag)) {
+                if (IS_ACK(flag) && goodLastAcked) {
                   cerr << "rcv ACK => TIME_WAIT" << endl;
                   cs->state.SetState(TIME_WAIT);
                   cs->state.SetTimerTries(2);
+                } else if (IS_FIN(flag)) {
+                  currSeqNum = SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
                 }
               }
 
@@ -387,7 +383,7 @@ int main(int argc, char *argv[])
                 // --------------  => CLOSED
                 //       x
 
-                if (IS_ACK(flag)) {
+                if (IS_ACK(flag) && goodLastAcked) {
                   cerr << "rcv ACK => CLOSED" << endl;
                   cs->state.SetState(CLOSED);
                 }
@@ -400,6 +396,10 @@ int main(int argc, char *argv[])
                 // timeout=2MSL
                 // ------------  => CLOSED
                 //  delete TCB
+
+                if(IS_FIN(flag) || IS_ACK(flag)){
+                  currSeqNum = SendBlankPkt(pktQ, c, ACK, currSeqNum, ackNum, mux);
+                }
               }
 
               break;
@@ -483,7 +483,7 @@ int main(int argc, char *argv[])
             ConnectionToStateMapping<TCPState> m(req.connection,
                                                  initialTimeout, //const Time &t ??,
                                                  tcps, //const STATE &s(seqNum, state, timerTries) ??
-                                                 true); //const bool &b); ??
+                                                 false); //const bool &b); ??
 
 
             clist.push_back(m);
