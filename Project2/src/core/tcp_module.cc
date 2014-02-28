@@ -170,11 +170,10 @@ int main(int argc, char *argv[])
           cerr << "timed out => CLOSED" << endl;
           i->state.SetState(CLOSED);
           i->bTmrActive = false;
-        }
-
-        if (i->state.GetState() == CLOSED) {
+        } else if (i->state.GetState() == CLOSED) {
           cerr << "CLOSED: for now switching to LISTEN" << endl;
           i->state.SetState(LISTEN);
+          i->state.bTmrActive = false;
         }
       }
 
@@ -544,26 +543,33 @@ int main(int argc, char *argv[])
                 cs->state.SetState(SYN_SENT);
               }
 
+              int bufsize = cs->state.SendBuffer.GetSize(),
+                acked = cs->state.GetLastAcked(),
+                sent = cs->state.GetLastSent();
+
+              unsigned size = bufsize - sent + acked;
+              unsigned char flags;
 
 
-              // unsigned bytes = MIN_MACRO(IP_PACKET_MAX_LENGTH-TCP_HEADER_MAX_LENGTH, req.data.GetSize());
-              // // create the payload of the packet
-              // Packet p(req.data.ExtractFront(bytes));
-              // // Make the IP header first since we need it to do the tcp checksum
-              // IPHeader sendIPHead;
-              // sendIPHead.SetProtocol(IP_PROTO_TCP);
-              // sendIPHead.SetSourceIP(req.connection.src);
-              // sendIPHead.SetDestIP(req.connection.dest);
-              // sendIPHead.SetTotalLength(bytes+TCP_HEADER_MAX_LENGTH+IP_HEADER_BASE_LENGTH);
-              // // push it onto the packet
-              // p.PushFrontHeader(sendIPHead);
-              // // Now build the TCP header
-              // TCPHeader sendTCPHead;
-              // sendTCPHead.SetSourcePort(req.connection.srcport,p);
-              // sendTCPHead.SetDestPort(req.connection.destport,p);
-              // sendTCPHead.SetSeqNum(100, p);
-              // sendTCPHead.SetAckNum(0,p);
-              // sendTCPHead.SetHeaderLen(TCP_HEADER_MAX_LENGTH,p);
+              if (size > 0) {
+                unsigned bytes = MIN_MACRO(IP_PACKET_MAX_LENGTH-TCP_HEADER_MAX_LENGTH, size);
+                // create the payload of the packet
+                Packet p(req.data.ExtractFront(bytes));
+                // Make the IP header first since we need it to do the tcp checksum
+                IPHeader sendIPHead;
+                sendIPHead.SetProtocol(IP_PROTO_TCP);
+                sendIPHead.SetSourceIP(req.connection.src);
+                sendIPHead.SetDestIP(req.connection.dest);
+                sendIPHead.SetTotalLength(bytes+TCP_HEADER_MAX_LENGTH+IP_HEADER_BASE_LENGTH);
+                // push it onto the packet
+                p.PushFrontHeader(sendIPHead);
+                // Now build the TCP header
+                TCPHeader sendTCPHead;
+                sendTCPHead.SetSourcePort(req.connection.srcport,p);
+                sendTCPHead.SetDestPort(req.connection.destport,p);
+                sendTCPHead.SetSeqNum(100, p);
+                sendTCPHead.SetAckNum(0,p);
+                sendTCPHead.SetHeaderLen(TCP_HEADER_MAX_LENGTH,p);
 
               // unsigned char flag;
               // SET_SYN(flag);
