@@ -82,11 +82,10 @@ unsigned int SendBlankPkt(list<Packet> pktQ, Connection c, unsigned int sendFlag
 int main(int argc, char *argv[])
 {
   MinetHandle mux, sock;
-  unsigned int currSeqNum = 1;
+  unsigned int currSeqNum = 1000;
 
   ConnectionList<TCPState> clist;
   list<Packet> pktQ;
-  unsigned int lastAcked;
 
   //MinetSend(mux, packet);
 
@@ -193,14 +192,14 @@ int main(int argc, char *argv[])
         unsigned char flag;
         recTCPHead.GetFlags(flag);
 
+        ConnectionList<TCPState>::iterator cs = clist.FindMatching(c);
+
         unsigned int ack;
         bool goodLastAcked = false;
         if (IS_ACK(flag)) {
           recTCPHead.GetAckNum(ack);
           goodLastAcked = cs->state.SetLastAcked(ack);
         }
-
-        ConnectionList<TCPState>::iterator cs = clist.FindMatching(c);
 
         //hard-coding to test mux stuff without sock implemented
         // TCPState hardCodedState(1000,LISTEN,2);
@@ -431,17 +430,23 @@ int main(int argc, char *argv[])
             // Create TCB
             //  snd SYN
             //cerr << "CONNECT (active open) => LISTEN" << endl;
-            //ConnectionList<TCPState>::iterator cs = clist.FindMatching(req.connection);
-            //if (cs==clist.end()) {
-            cerr << "active open, snd SYN => SYN_SENT" << endl;
-            ConnectionToStateMapping<TCPState> m(req.connection,
-                                                   initialTimeout, //const Time &t ??,
-                                                   TCPState(currSeqNum, SYN_SENT, initialTimerTries), //const STATE &s(seqNum, state, timerTries) ??
-                                                   true); //const bool &b); ??
-            clist.push_back(m);
+            ConnectionList<TCPState>::iterator cs = clist.FindMatching(req.connection);
+            if (cs==clist.end()) {
+              cerr << "active open, snd SYN => SYN_SENT" << endl;
 
-            currSeqNum = SendBlankPkt(pktQ, req.connection, SYN, currSeqNum, 0, mux);
-            //}
+              TCPState tcps(currSeqNum, SYN_SENT, initialTimerTries);
+              tcps.SetSendRwnd(3000);
+              tcps.SetLastRecvd(0);
+              tcps.SetLastSent(currSeqNum - 1);
+              tcps.SetLastAcked(currSeqNum - 1);
+              ConnectionToStateMapping<TCPState> m(req.connection,
+                                                     initialTimeout, //const Time &t ??,
+                                                     tcps, //const STATE &s(seqNum, state, timerTries) ??
+                                                     true); //const bool &b); ??
+              clist.push_back(m);
+
+              currSeqNum = SendBlankPkt(pktQ, req.connection, SYN, currSeqNum, 0, mux);
+            }
 
 
 
@@ -469,10 +474,18 @@ int main(int argc, char *argv[])
             // ------------  => LISTEN
             //  create TCB
             cerr << "ACCEPT (passive open) => LISTEN" << endl;
+            TCPState tcps(currSeqNum, LISTEN, initialTimerTries);
+            tcps.SetSendRwnd(3000);
+            tcps.SetLastRecvd(0);
+            tcps.SetLastSent(currSeqNum - 1);
+            tcps.SetLastAcked(currSeqNum - 1);
+
             ConnectionToStateMapping<TCPState> m(req.connection,
                                                  initialTimeout, //const Time &t ??,
-                                                 TCPState(currSeqNum, LISTEN, initialTimerTries), //const STATE &s(seqNum, state, timerTries) ??
-                                                 false); //const bool &b); ??
+                                                 tcps, //const STATE &s(seqNum, state, timerTries) ??
+                                                 true); //const bool &b); ??
+
+
             clist.push_back(m);
 
             SockRequestResponse repl;
