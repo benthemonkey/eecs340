@@ -23,11 +23,11 @@ using std::string;
 
 enum flagToSend { ACK, FIN, SYNACK, SYN };
 
-unsigned int SendPkt(Connection c, unsigned int sendFlagType, unsigned int seqNum, unsigned int ackNum, MinetHandle mux) {
+unsigned int SendPkt(Connection c, unsigned int sendFlagType, unsigned int seqNum, unsigned int ackNum, MinetHandle mux, Buffer data) {
 
-  unsigned bytes = 0;//MIN_MACRO(IP_PACKET_MAX_LENGTH-TCP_HEADER_MAX_LENGTH, req.data.GetSize());
+  unsigned bytes = MIN_MACRO(IP_PACKET_MAX_LENGTH-TCP_HEADER_BASE_LENGTH, data.GetSize());
   // create the payload of the packet
-  Packet sendP;//(req.data.ExtractFront(bytes));
+  Packet sendP(data.ExtractFront(bytes));
   // Make the IP header first since we need it to do the tcp checksum
   IPHeader sendIPHead;
   sendIPHead.SetProtocol(IP_PROTO_TCP);
@@ -73,6 +73,10 @@ unsigned int SendPkt(Connection c, unsigned int sendFlagType, unsigned int seqNu
 
   MinetSend(mux,sendP);
   return seqNum + 1;
+}
+
+unsigned int SendBlankPkt(Connection c, unsigned int sendFlagType, unsigned int seqNum, unsigned int ackNum, MinetHandle mux) {
+  return SendPkt(c, sendFlagType, seqNum, ackNum, mux, Buffer(NULL,0));
 }
 
 int main(int argc, char *argv[])
@@ -196,7 +200,7 @@ int main(int argc, char *argv[])
                 if (IS_SYN(flag))
                 {
                   cerr << "rcv SYN, snd SYNACK => SYN_RCVD" << endl;
-                  currSeqNum = SendPkt(c, SYNACK, currSeqNum, ackNum, mux);
+                  currSeqNum = SendBlankPkt(c, SYNACK, currSeqNum, ackNum, mux);
                   cs->state.SetState(SYN_RCVD);
                 }
 
@@ -216,7 +220,7 @@ int main(int argc, char *argv[])
                 } else {
                   cerr << "no ACK, resending SYNACK => SYN_RCVD" << endl;
                   currSeqNum--;
-                  currSeqNum = SendPkt(c, SYNACK, currSeqNum, ackNum, mux);
+                  currSeqNum = SendBlankPkt(c, SYNACK, currSeqNum, ackNum, mux);
                 }
               }
               break;
@@ -231,14 +235,15 @@ int main(int argc, char *argv[])
                     // ------------  => ESTABLISHED
                     //   snd ACK
                     cerr << "rcv SYNACK, snd ACK => ESTABLISHED" << endl;
-                    currSeqNum = SendPkt(c, ACK, currSeqNum, ackNum, mux);
+                    currSeqNum = SendBlankPkt(c, ACK, currSeqNum, ackNum, mux);
                     cs->state.SetState(ESTABLISHED);
+                    cs->state.SetLastAcked(ackNum);
                   } else {
                     // rcv SYN
                     // -------  => SYN_RCVD
                     // snd ACK
                     cerr << "rcv SYN, snd ACK => SYN_RCVD" << endl;
-                    currSeqNum = SendPkt(c, ACK, currSeqNum, ackNum, mux);
+                    currSeqNum = SendBlankPkt(c, ACK, currSeqNum, ackNum, mux);
                     cs->state.SetState(SYN_RCVD);
                   }
                 }                
@@ -258,7 +263,7 @@ int main(int argc, char *argv[])
                 // snd ACK
                 if (IS_FIN(flag)) {
                   cerr << "rcv FIN, snd ACK => CLOSE_WAIT" << endl;
-                  currSeqNum = SendPkt(c, ACK, currSeqNum, ackNum, mux);
+                  currSeqNum = SendBlankPkt(c, ACK, currSeqNum, ackNum, mux);
                   cs->state.SetState(CLOSE_WAIT);
 
                   //========================
@@ -268,7 +273,7 @@ int main(int argc, char *argv[])
                   //!!!!!!!!!!!!!!!!!!!!!!!!
                   //========================
                   currSeqNum--;
-                  currSeqNum = SendPkt(c, FIN, currSeqNum, ackNum, mux);
+                  currSeqNum = SendBlankPkt(c, FIN, currSeqNum, ackNum, mux);
                   cs->state.SetState(TIME_WAIT);
                   cerr << "jklol => TIME_WAIT" << endl;
                 }
@@ -285,7 +290,7 @@ int main(int argc, char *argv[])
 
                 if (IS_FIN(flag) && IS_ACK(flag)) {
                   cerr << "rcv FINACK, snd FIN => LAST_ACK" << endl;
-                  currSeqNum = SendPkt(c, FIN, currSeqNum, ackNum, mux);
+                  currSeqNum = SendBlankPkt(c, FIN, currSeqNum, ackNum, mux);
                   cs->state.SetState(LAST_ACK);
                 }
               }
@@ -307,7 +312,7 @@ int main(int argc, char *argv[])
                 // snd ACK
                 if (IS_FIN(flag)) {
                   cerr << "rcv FIN, snd ACK => CLOSING" << endl;
-                  currSeqNum = SendPkt(c, ACK, currSeqNum, ackNum, mux);
+                  currSeqNum = SendBlankPkt(c, ACK, currSeqNum, ackNum, mux);
                   cs->state.SetState(CLOSING);
                 }
               }
@@ -321,7 +326,7 @@ int main(int argc, char *argv[])
                 // snd ACK
                 if (IS_FIN(flag)) {
                   cerr << "rcv FIN => TIME_WAIT" << endl;
-                  currSeqNum = SendPkt(c, ACK, currSeqNum, ackNum, mux);
+                  currSeqNum = SendBlankPkt(c, ACK, currSeqNum, ackNum, mux);
                   cs->state.SetState(TIME_WAIT);
                   cs->state.SetTimerTries(2);
                 }
@@ -388,15 +393,20 @@ int main(int argc, char *argv[])
             // -----------  => SYN_SENT
             // Create TCB
             //  snd SYN
-            cerr << "CONNECT (active open) => LISTEN" << endl;
-            ConnectionList<TCPState>::iterator cs = clist.FindMatching(req.connection);
-            if (cs==clist.end()) {
-              ConnectionToStateMapping<TCPState> m(req.connection,
+            //cerr << "CONNECT (active open) => LISTEN" << endl;
+            //ConnectionList<TCPState>::iterator cs = clist.FindMatching(req.connection);
+            //if (cs==clist.end()) {
+            cerr << "active open, snd SYN => SYN_SENT" << endl;
+            ConnectionToStateMapping<TCPState> m(req.connection,
                                                    5, //const Time &t ??,
-                                                   TCPState(1000,LISTEN,2), //const STATE &s(seqNum, state, timerTries) ??
+                                                   TCPState(currSeqNum,SYN_SENT,8), //const STATE &s(seqNum, state, timerTries) ??
                                                    false); //const bool &b); ??
-              clist.push_back(m);
-            }
+            clist.push_back(m);
+            currSeqNum = SendBlankPkt(req.connection, SYN, currSeqNum, 0, mux);
+              
+            //}
+
+            
 
             SockRequestResponse repl;
             repl.type=STATUS;
@@ -405,9 +415,7 @@ int main(int argc, char *argv[])
             repl.error=EOK;
             MinetSend(sock,repl);
 
-            cerr << "active open, snd SYN => SYN_SENT" << endl;
-            currSeqNum = SendPkt(req.connection, SYN, currSeqNum, 0, mux);
-            cs->state.SetState(SYN_SENT);
+            
 
             SockRequestResponse write;
             write.type=WRITE;
@@ -426,7 +434,7 @@ int main(int argc, char *argv[])
             cerr << "ACCEPT (passive open) => LISTEN" << endl;
             ConnectionToStateMapping<TCPState> m(req.connection,
                                                  5, //const Time &t ??,
-                                                 TCPState(1000,LISTEN,8), //const STATE &s(seqNum, state, timerTries) ??
+                                                 TCPState(currSeqNum,LISTEN,8), //const STATE &s(seqNum, state, timerTries) ??
                                                  false); //const bool &b); ??
             clist.push_back(m);
 
@@ -453,9 +461,14 @@ int main(int argc, char *argv[])
               //   SEND
               // -------  => SYN_SENT
               // snd SYN
-              cerr << "SEND, snd SYN => SYN_SENT" << endl;
-              currSeqNum = SendPkt(req.connection, SYN, currSeqNum, 0, mux);
-              cs->state.SetState(SYN_SENT);
+              //cerr << "SEND, snd SYN => SYN_SENT" << endl;
+              
+              if (cs->state.GetState() == ESTABLISHED)
+              {
+                unsigned int ackNum = cs->state.GetLastAcked();
+                currSeqNum = SendPkt(req.connection, SYN, currSeqNum, ackNum, mux, req.data);
+                cs->state.SetState(SYN_SENT);
+              }
 
 
 
@@ -489,7 +502,7 @@ int main(int argc, char *argv[])
               // p.PushBackHeader(sendTCPHead);
               // MinetSend(mux,p);
 
-              repl.bytes=0;//bytes;
+              repl.bytes=req.data.GetSize();//bytes;
               repl.error=EOK;
             }
 
@@ -539,7 +552,7 @@ int main(int argc, char *argv[])
                   // -------  => FIN_WAIT1
                   // snd FIN
                   cerr << "CLOSE, snd FIN => FIN_WAIT1" << endl;
-                  currSeqNum = SendPkt(req.connection, FIN, currSeqNum, 0, mux);
+                  currSeqNum = SendBlankPkt(req.connection, FIN, currSeqNum, 0, mux);
                   cs->state.SetState(FIN_WAIT1);
                 }
                 break;
@@ -549,7 +562,7 @@ int main(int argc, char *argv[])
                   // -------  => LAST_ACK
                   // snd FIN
                   cerr << "CLOSE, snd FIN => LAST_ACK" << endl;
-                  currSeqNum = SendPkt(req.connection, FIN, currSeqNum, 0, mux);
+                  currSeqNum = SendBlankPkt(req.connection, FIN, currSeqNum, 0, mux);
                   cs->state.SetState(LAST_ACK);
                 }
                 break;
