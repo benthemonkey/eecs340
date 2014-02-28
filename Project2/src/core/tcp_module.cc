@@ -184,11 +184,6 @@ int main(int argc, char *argv[])
               {
                 cerr << "CLOSED: ";
                 
-
-
-                // passive open
-                // ------------  => LISTEN
-                //  create TCB
               }
 
               break;
@@ -228,13 +223,25 @@ int main(int argc, char *argv[])
               case  SYN_SENT:
               {
                 cerr << "SYN_SENT: ";
-                // rcv SYN
-                // -------  => SYN_RCVD
-                // snd ACK
-
-                // rcv SYN, ACK
-                // ------------  => ESTABLISHED
-                //   snd ACK
+                if (IS_SYN(flag))
+                {
+                  if (IS_ACK(flag))
+                  {
+                    // rcv SYN, ACK
+                    // ------------  => ESTABLISHED
+                    //   snd ACK
+                    cerr << "rcv SYNACK, snd ACK => ESTABLISHED" << endl;
+                    currSeqNum = SendPkt(c, ACK, currSeqNum, ackNum, mux);
+                    cs->state.SetState(ESTABLISHED);
+                  } else {
+                    // rcv SYN
+                    // -------  => SYN_RCVD
+                    // snd ACK
+                    cerr << "rcv SYN, snd ACK => SYN_RCVD" << endl;
+                    currSeqNum = SendPkt(c, ACK, currSeqNum, ackNum, mux);
+                    cs->state.SetState(SYN_RCVD);
+                  }
+                }                
               }
               break;
               case SYN_SENT1:
@@ -376,7 +383,11 @@ int main(int argc, char *argv[])
 
         switch (req.type) {
           case CONNECT:
-          {//active open
+          {
+            // active open
+            // -----------  => SYN_SENT
+            // Create TCB
+            //  snd SYN
             cerr << "CONNECT (active open) => LISTEN" << endl;
             ConnectionList<TCPState>::iterator cs = clist.FindMatching(req.connection);
             if (cs==clist.end()) {
@@ -394,10 +405,9 @@ int main(int argc, char *argv[])
             repl.error=EOK;
             MinetSend(sock,repl);
 
-            // active open
-            // -----------  => SYN_SENT
-            // Create TCB
-            //  snd SYN
+            cerr << "active open, snd SYN => SYN_SENT" << endl;
+            currSeqNum = SendPkt(req.connection, SYN, currSeqNum, 0, mux);
+            cs->state.SetState(SYN_SENT);
 
             SockRequestResponse write;
             write.type=WRITE;
@@ -409,7 +419,10 @@ int main(int argc, char *argv[])
           }
           break;
           case ACCEPT:
-          {//passive open
+          {
+            // passive open
+            // ------------  => LISTEN
+            //  create TCB
             cerr << "ACCEPT (passive open) => LISTEN" << endl;
             ConnectionToStateMapping<TCPState> m(req.connection,
                                                  5, //const Time &t ??,
