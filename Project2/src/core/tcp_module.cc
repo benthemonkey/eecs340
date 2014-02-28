@@ -212,7 +212,9 @@ int main(int argc, char *argv[])
           } else {
             //cerr << "State:" << cs->state.GetState() << endl;
 
-            cs->state.SetTimerTries(3);
+            if (cs->state.GetState() != TIME_WAIT) {
+              cs->state.SetTimerTries(3);
+            }
             cs->bTmrActive = true;
 
             switch (cs->state.GetState()) {
@@ -430,7 +432,7 @@ int main(int argc, char *argv[])
                                                    TCPState(currSeqNum, SYN_SENT, initialTimerTries), //const STATE &s(seqNum, state, timerTries) ??
                                                    true); //const bool &b); ??
             clist.push_back(m);
-            
+
             SendBlankPkt(pktQ, req.connection, SYN, currSeqNum, 0, mux);
             //}
 
