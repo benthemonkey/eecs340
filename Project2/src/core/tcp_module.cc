@@ -394,6 +394,8 @@ int main(int argc, char *argv[])
         //  Data from the Sockets layer above  //
       if (event.handle==sock) {
         SockRequestResponse req;
+        unsigned int initialTimeout = 3,
+                    initialTimerTries = 3;
         MinetReceive(sock,req);
         cerr << "Received Socket Request:" << req << endl;
 
@@ -409,15 +411,15 @@ int main(int argc, char *argv[])
             //if (cs==clist.end()) {
             cerr << "active open, snd SYN => SYN_SENT" << endl;
             ConnectionToStateMapping<TCPState> m(req.connection,
-                                                   5, //const Time &t ??,
-                                                   TCPState(currSeqNum,SYN_SENT,8), //const STATE &s(seqNum, state, timerTries) ??
+                                                   initialTimeout, //const Time &t ??,
+                                                   TCPState(currSeqNum,SYN_SENT,initialTimerTries), //const STATE &s(seqNum, state, timerTries) ??
                                                    false); //const bool &b); ??
             clist.push_back(m);
             currSeqNum = SendBlankPkt(req.connection, SYN, currSeqNum, 0, mux);
-              
+
             //}
 
-            
+
 
             SockRequestResponse repl;
             repl.type=STATUS;
@@ -426,7 +428,7 @@ int main(int argc, char *argv[])
             repl.error=EOK;
             MinetSend(sock,repl);
 
-            
+
 
             SockRequestResponse write;
             write.type=WRITE;
@@ -444,8 +446,8 @@ int main(int argc, char *argv[])
             //  create TCB
             cerr << "ACCEPT (passive open) => LISTEN" << endl;
             ConnectionToStateMapping<TCPState> m(req.connection,
-                                                 5, //const Time &t ??,
-                                                 TCPState(currSeqNum,LISTEN,8), //const STATE &s(seqNum, state, timerTries) ??
+                                                 initialTimeout, //const Time &t ??,
+                                                 TCPState(currSeqNum, LISTEN, initialTimerTries), //const STATE &s(seqNum, state, timerTries) ??
                                                  false); //const bool &b); ??
             clist.push_back(m);
 
@@ -473,7 +475,7 @@ int main(int argc, char *argv[])
               // -------  => SYN_SENT
               // snd SYN
               //cerr << "SEND, snd SYN => SYN_SENT" << endl;
-              
+
               if (cs->state.GetState() == ESTABLISHED)
               {
                 unsigned int ackNum = cs->state.GetLastAcked();
