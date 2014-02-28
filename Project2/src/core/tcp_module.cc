@@ -123,25 +123,25 @@ int main(int argc, char *argv[])
         if (!expired) {
           //Remove already acked packets
           list<Packet> tmpList(pktQ);
-          while(!tmpList.empty()){
-            Packet sendP = tmpList.front();
-            unsigned int lastAcked = i->state.GetLastAcked();
-            TCPHeader recTCPHead=sendP.FindHeader(Headers::TCPHeader);
-            unsigned int seqNum;
-            recTCPHead.GetSeqNum(seqNum);
-            cerr << "seq num: " << tmpList.size() << endl;
-            if (seqNum > lastAcked)
-            {
-              cerr << "Resending Packet" << endl;
-              MinetSend(mux, sendP);
-            }
-            else
-            {
-              pktQ.pop_front();
-            }
+          // while(!tmpList.empty()){
+          //   Packet sendP = tmpList.front();
+          //   unsigned int lastAcked = i->state.GetLastAcked();
+          //   TCPHeader recTCPHead=sendP.FindHeader(Headers::TCPHeader);
+          //   unsigned int seqNum;
+          //   recTCPHead.GetSeqNum(seqNum);
+          //   cerr << "seq num: " << tmpList.size() << endl;
+          //   if (seqNum > lastAcked)
+          //   {
+          //     cerr << "Resending Packet" << endl;
+          //     MinetSend(mux, sendP);
+          //   }
+          //   else
+          //   {
+          //     pktQ.pop_front();
+          //   }
 
-            tmpList.pop_front();
-          }
+          //   tmpList.pop_front();
+          // }
         }
 
         switch (i->state.GetState()) {
