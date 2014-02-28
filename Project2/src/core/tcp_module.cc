@@ -23,7 +23,7 @@ using std::string;
 
 enum flagToSend { ACK, FIN, SYNACK, SYN };
 
-unsigned int SendPkt(Connection c, unsigned int sendFlagType, unsigned int seqNum, TCPHeader recTCPHead, MinetHandle mux) {
+unsigned int SendPkt(Connection c, unsigned int sendFlagType, unsigned int seqNum, unsigned int ackNum, MinetHandle mux) {
 
   unsigned bytes = 0;//MIN_MACRO(IP_PACKET_MAX_LENGTH-TCP_HEADER_MAX_LENGTH, req.data.GetSize());
   // create the payload of the packet
@@ -42,10 +42,8 @@ unsigned int SendPkt(Connection c, unsigned int sendFlagType, unsigned int seqNu
   sendTCPHead.SetDestPort(c.destport,sendP);
   sendTCPHead.SetSeqNum(seqNum, sendP);
 
-  unsigned int recSeqNum;
-  recTCPHead.GetSeqNum(recSeqNum);
   if (sendFlagType == ACK || sendFlagType == SYNACK) {
-    sendTCPHead.SetAckNum(recSeqNum+1,sendP);
+    sendTCPHead.SetAckNum(ackNum,sendP);
   }
 
   sendTCPHead.SetHeaderLen(TCP_HEADER_BASE_LENGTH/4,sendP);
@@ -145,6 +143,10 @@ int main(int argc, char *argv[])
         IPHeader recIPHead=receiveP.FindHeader(Headers::IPHeader);
         TCPHeader recTCPHead=receiveP.FindHeader(Headers::TCPHeader);
 
+        unsigned int recSeqNum;
+        recTCPHead.GetSeqNum(recSeqNum);
+        unsigned int ackNum = recSeqNum + 1;
+
         cerr << "IP Header is " << recIPHead << endl;
         cerr << "TCP Header is " << recTCPHead << endl;
 
@@ -181,10 +183,7 @@ int main(int argc, char *argv[])
               case CLOSED:
               {
                 cerr << "CLOSED: ";
-                // active open
-                // -----------  => SYN_SENT
-                // Create TCB
-                //  snd SYN
+                
 
 
                 // passive open
@@ -202,13 +201,11 @@ int main(int argc, char *argv[])
                 if (IS_SYN(flag))
                 {
                   cerr << "rcv SYN, snd SYNACK => SYN_RCVD" << endl;
-                  currSeqNum = SendPkt(c, SYNACK, currSeqNum, recTCPHead, mux);
+                  currSeqNum = SendPkt(c, SYNACK, currSeqNum, ackNum, mux);
                   cs->state.SetState(SYN_RCVD);
                 }
 
-                //   SEND
-                // -------  => SYN_SENT
-                // snd SYN
+                
               }
               break;
               case SYN_RCVD:
@@ -219,15 +216,12 @@ int main(int argc, char *argv[])
                   // rcv ACK of SYN
                   // --------------  => ESTABLISHED
                   //       x
-                  else
-                  {
-                    cerr << "rcv ACK => ESTABLISHED" << endl;
-                    cs->state.SetState(ESTABLISHED);
-                  }
+                  cerr << "rcv ACK => ESTABLISHED" << endl;
+                  cs->state.SetState(ESTABLISHED);
                 } else {
                   cerr << "no ACK, resending SYNACK => SYN_RCVD" << endl;
                   currSeqNum--;
-                  currSeqNum = SendPkt(c, SYNACK, currSeqNum, recTCPHead, mux);
+                  currSeqNum = SendPkt(c, SYNACK, currSeqNum, ackNum, mux);
                 }
               }
               break;
@@ -257,7 +251,7 @@ int main(int argc, char *argv[])
                 // snd ACK
                 if (IS_FIN(flag)) {
                   cerr << "rcv FIN, snd ACK => CLOSE_WAIT" << endl;
-                  currSeqNum = SendPkt(c, ACK, currSeqNum, recTCPHead, mux);
+                  currSeqNum = SendPkt(c, ACK, currSeqNum, ackNum, mux);
                   cs->state.SetState(CLOSE_WAIT);
 
                   //========================
@@ -267,7 +261,7 @@ int main(int argc, char *argv[])
                   //!!!!!!!!!!!!!!!!!!!!!!!!
                   //========================
                   currSeqNum--;
-                  currSeqNum = SendPkt(c, FIN, currSeqNum, recTCPHead, mux);
+                  currSeqNum = SendPkt(c, FIN, currSeqNum, ackNum, mux);
                   cs->state.SetState(TIME_WAIT);
                   cerr << "jklol => TIME_WAIT" << endl;
                 }
@@ -284,7 +278,7 @@ int main(int argc, char *argv[])
 
                 if (IS_FIN(flag) && IS_ACK(flag)) {
                   cerr << "rcv FINACK, snd FIN => LAST_ACK" << endl;
-                  currSeqNum = SendPkt(c, FIN, currSeqNum, recTCPHead, mux);
+                  currSeqNum = SendPkt(c, FIN, currSeqNum, ackNum, mux);
                   cs->state.SetState(LAST_ACK);
                 }
               }
@@ -306,7 +300,7 @@ int main(int argc, char *argv[])
                 // snd ACK
                 if (IS_FIN(flag)) {
                   cerr << "rcv FIN, snd ACK => CLOSING" << endl;
-                  currSeqNum = SendPkt(c, ACK, currSeqNum, recTCPHead, mux);
+                  currSeqNum = SendPkt(c, ACK, currSeqNum, ackNum, mux);
                   cs->state.SetState(CLOSING);
                 }
               }
@@ -320,7 +314,7 @@ int main(int argc, char *argv[])
                 // snd ACK
                 if (IS_FIN(flag)) {
                   cerr << "rcv FIN => TIME_WAIT" << endl;
-                  currSeqNum = SendPkt(c, ACK, currSeqNum, recTCPHead, mux);
+                  currSeqNum = SendPkt(c, ACK, currSeqNum, ackNum, mux);
                   cs->state.SetState(TIME_WAIT);
                   cs->state.SetTimerTries(2);
                 }
@@ -385,7 +379,7 @@ int main(int argc, char *argv[])
           {//active open
             cerr << "CONNECT (active open) => LISTEN" << endl;
             ConnectionList<TCPState>::iterator cs = clist.FindMatching(req.connection);
-            if (cs!=clist.end()) {
+            if (cs==clist.end()) {
               ConnectionToStateMapping<TCPState> m(req.connection,
                                                    5, //const Time &t ??,
                                                    TCPState(1000,LISTEN,2), //const STATE &s(seqNum, state, timerTries) ??
@@ -399,6 +393,11 @@ int main(int argc, char *argv[])
             repl.bytes=0;
             repl.error=EOK;
             MinetSend(sock,repl);
+
+            // active open
+            // -----------  => SYN_SENT
+            // Create TCB
+            //  snd SYN
 
             SockRequestResponse write;
             write.type=WRITE;
@@ -438,37 +437,46 @@ int main(int argc, char *argv[])
               repl.error=ENOMATCH;
               cout << clist << endl;
             } else {
-              unsigned bytes = MIN_MACRO(IP_PACKET_MAX_LENGTH-TCP_HEADER_MAX_LENGTH, req.data.GetSize());
-              // create the payload of the packet
-              Packet p(req.data.ExtractFront(bytes));
-              // Make the IP header first since we need it to do the tcp checksum
-              IPHeader sendIPHead;
-              sendIPHead.SetProtocol(IP_PROTO_TCP);
-              sendIPHead.SetSourceIP(req.connection.src);
-              sendIPHead.SetDestIP(req.connection.dest);
-              sendIPHead.SetTotalLength(bytes+TCP_HEADER_MAX_LENGTH+IP_HEADER_BASE_LENGTH);
-              // push it onto the packet
-              p.PushFrontHeader(sendIPHead);
-              // Now build the TCP header
-              TCPHeader sendTCPHead;
-              sendTCPHead.SetSourcePort(req.connection.srcport,p);
-              sendTCPHead.SetDestPort(req.connection.destport,p);
-              sendTCPHead.SetSeqNum(100, p);
-              sendTCPHead.SetAckNum(0,p);
-              sendTCPHead.SetHeaderLen(TCP_HEADER_MAX_LENGTH,p);
+              //   SEND
+              // -------  => SYN_SENT
+              // snd SYN
+              cerr << "SEND, snd SYN => SYN_SENT" << endl;
+              currSeqNum = SendPkt(req.connection, SYN, currSeqNum, 0, mux);
+              cs->state.SetState(SYN_SENT);
 
-              unsigned char flag;
-              SET_SYN(flag);
-              sendTCPHead.SetFlags(flag,p);
-              sendTCPHead.SetWinSize(100,p);
 
-              //sendTCPHead.Set
-              //sendTCPHead.SetLength(TCP_HEADER_MAX_LENGTH+bytes,p);
-              // Now we want to have the tcp header BEHIND the IP header
-              p.PushBackHeader(sendTCPHead);
-              MinetSend(mux,p);
 
-              repl.bytes=bytes;
+              // unsigned bytes = MIN_MACRO(IP_PACKET_MAX_LENGTH-TCP_HEADER_MAX_LENGTH, req.data.GetSize());
+              // // create the payload of the packet
+              // Packet p(req.data.ExtractFront(bytes));
+              // // Make the IP header first since we need it to do the tcp checksum
+              // IPHeader sendIPHead;
+              // sendIPHead.SetProtocol(IP_PROTO_TCP);
+              // sendIPHead.SetSourceIP(req.connection.src);
+              // sendIPHead.SetDestIP(req.connection.dest);
+              // sendIPHead.SetTotalLength(bytes+TCP_HEADER_MAX_LENGTH+IP_HEADER_BASE_LENGTH);
+              // // push it onto the packet
+              // p.PushFrontHeader(sendIPHead);
+              // // Now build the TCP header
+              // TCPHeader sendTCPHead;
+              // sendTCPHead.SetSourcePort(req.connection.srcport,p);
+              // sendTCPHead.SetDestPort(req.connection.destport,p);
+              // sendTCPHead.SetSeqNum(100, p);
+              // sendTCPHead.SetAckNum(0,p);
+              // sendTCPHead.SetHeaderLen(TCP_HEADER_MAX_LENGTH,p);
+
+              // unsigned char flag;
+              // SET_SYN(flag);
+              // sendTCPHead.SetFlags(flag,p);
+              // sendTCPHead.SetWinSize(100,p);
+
+              // //sendTCPHead.Set
+              // //sendTCPHead.SetLength(TCP_HEADER_MAX_LENGTH+bytes,p);
+              // // Now we want to have the tcp header BEHIND the IP header
+              // p.PushBackHeader(sendTCPHead);
+              // MinetSend(mux,p);
+
+              repl.bytes=0;//bytes;
               repl.error=EOK;
             }
 
@@ -494,57 +502,51 @@ int main(int argc, char *argv[])
             SockRequestResponse repl;
             repl.connection=req.connection;
             repl.type=STATUS;
-            cout << 6 << endl;
+
             if (cs==clist.end()) {
               repl.error=ENOMATCH;
+              MinetSend(sock,repl);
             } else {
               repl.error=EOK;
-              clist.erase(cs);
-            }
-            MinetSend(sock,repl);
-            cout << 7 << endl;
+              MinetSend(sock,repl);
 
-            switch (cs->state.GetState()) {
-              case LISTEN:
-              {
-                //   CLOSE
-                // ----------  => CLOSED
-                // delete TCB
+              switch (cs->state.GetState()) {
+                case LISTEN:
+                case SYN_SENT:
+                {
+                  //   CLOSE
+                  // ----------  => CLOSED
+                  // delete TCB
+                  clist.erase(cs);
+                }
+                case SYN_RCVD:
+                case ESTABLISHED:
+                {
+                  //  CLOSE
+                  // -------  => FIN_WAIT1
+                  // snd FIN
+                  cerr << "CLOSE, snd FIN => FIN_WAIT1" << endl;
+                  currSeqNum = SendPkt(req.connection, FIN, currSeqNum, 0, mux);
+                  cs->state.SetState(FIN_WAIT1);
+                }
+                break;
+                case CLOSE_WAIT:
+                {
+                  //  CLOSE
+                  // -------  => LAST_ACK
+                  // snd FIN
+                  cerr << "CLOSE, snd FIN => LAST_ACK" << endl;
+                  currSeqNum = SendPkt(req.connection, FIN, currSeqNum, 0, mux);
+                  cs->state.SetState(LAST_ACK);
+                }
+                break;
+                default:
+
+                break;
               }
-              break;
-              case SYN_RCVD:
-              {
-                //  CLOSE
-                // -------  => FIN_WAIT1
-                // snd FIN
-                // if (IS_FIN(flag)) {
-                //   cerr << "rcv FINACK, snd FIN => FIN_WAIT1" << endl;
-                //   currSeqNum = SendPkt(c, FIN, currSeqNum, recTCPHead, mux);
-                //   cs->state.SetState(FIN_WAIT1);
-                // }
-              }
-              break;
-              case SYN_SENT:
-              {
-                //   CLOSE
-                // ----------  => CLOSED
-                // delete TCB
-              }
-              case ESTABLISHED:
-              {
-                //  CLOSE
-                // -------  => FIN_WAIT1
-                // snd FIN
-              }
-              break;
-              case CLOSE_WAIT:
-              {
-                //  CLOSE
-                // -------  => LAST_ACK
-                // snd FIN
-              }
-              break;
             }
+
+            
           }
           break;
           case STATUS:
