@@ -113,6 +113,13 @@ int main(int argc, char *argv[])
     if (event.eventtype == MinetEvent::Timeout) {
       for (ConnectionList<TCPState>::iterator i = clist.begin(); i != clist.end(); ++i) {
         switch (i->state.GetState()) {
+          case LAST_ACK:
+          {
+            if (i->state.ExpireTimerTries()) {
+              cerr << "LAST_ACK: timed out => CLOSED" << endl;
+              i->state.SetState(CLOSED);
+            }
+          }
           case TIME_WAIT:
           {
             if (i->state.ExpireTimerTries()) {
@@ -123,13 +130,16 @@ int main(int argc, char *argv[])
           break;
           case CLOSED:
           {
-            cerr << "CLOSED: deleting from clist" << endl;
-            clist.erase(i);
+            // cerr << "CLOSED: deleting from clist" << endl;
+            // clist.erase(i);
+            // i--;
+            cerr << "CLOSED: for now switching to LISTEN" << endl;
+            i->state.SetState(LISTEN);
           }
         }
       }
 
-      cerr << "tic ";
+      //cerr << "tic ";
     } else if (event.eventtype!=MinetEvent::Dataflow || event.direction!=MinetEvent::IN) {
       MinetSendToMonitor(MinetMonitoringEvent("Unknown event ignored."));
       // if we received a valid event from Minet, do processing
@@ -187,7 +197,7 @@ int main(int argc, char *argv[])
               case CLOSED:
               {
                 cerr << "CLOSED: ";
-                
+
               }
 
               break;
@@ -204,7 +214,7 @@ int main(int argc, char *argv[])
                   cs->state.SetState(SYN_RCVD);
                 }
 
-                
+
               }
               break;
               case SYN_RCVD:
@@ -246,7 +256,7 @@ int main(int argc, char *argv[])
                     currSeqNum = SendBlankPkt(c, ACK, currSeqNum, ackNum, mux);
                     cs->state.SetState(SYN_RCVD);
                   }
-                }                
+                }
               }
               break;
               case SYN_SENT1:
@@ -292,6 +302,7 @@ int main(int argc, char *argv[])
                   cerr << "rcv FINACK, snd FIN => LAST_ACK" << endl;
                   currSeqNum = SendBlankPkt(c, FIN, currSeqNum, ackNum, mux);
                   cs->state.SetState(LAST_ACK);
+                  cs->state.SetTimerTries(1);
                 }
               }
 
@@ -572,7 +583,7 @@ int main(int argc, char *argv[])
               }
             }
 
-            
+
           }
           break;
           case STATUS:
