@@ -10,7 +10,7 @@ ostream &RoutingMessage::Print(ostream &os) const
 #endif
 
 
-#if defined(LINKSTATE)
+/*#if defined(LINKSTATE)
 
 ostream &RoutingMessage::Print(ostream &os) const
 {
@@ -29,7 +29,7 @@ RoutingMessage::RoutingMessage(const RoutingMessage &rhs)
   : srcnode(rhs.srcnode), link(rhs.link), ttl(rhs.ttl), seqno(rhs.seqno)
 {}
 
-#endif
+#endif*/
 
 
 #if defined(DISTANCEVECTOR)

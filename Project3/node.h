@@ -22,15 +22,15 @@ class Node {
   double   bw;
   double   lat;
 
-#if defined(LINKSTATE)
+/*#if defined(LINKSTATE)
   static const unsigned maxttl;
   unsigned seqno;
-#endif
+#endif*/
 
 #if defined(DISTANCEVECTOR)
   Table table;
 #endif
-  
+
   // students will add protocol-specific data here
 
  public:
@@ -41,7 +41,7 @@ class Node {
   virtual ~Node();
 
   virtual bool Matches(const Node &rhs) const;
-  
+
   virtual void SetNumber(const unsigned n);
   virtual unsigned GetNumber() const;
 
