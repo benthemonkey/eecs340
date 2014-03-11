@@ -31,6 +31,7 @@ class Node {
   Table table;
 
   void UpdateRoutingTable();
+  void UpdateTableRow(unsigned dest, unsigned nextHop, double cost);
 #endif
 
   // students will add protocol-specific data here

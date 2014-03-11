@@ -169,20 +169,14 @@ ostream & Node::Print(ostream &os) const
 
 void Node::LinkUpdate(const Link *l)
 {
-  double linkLat = l->GetLatency();
-  unsigned linkDest = l->GetDest();
-  Table* t = this->GetRoutingTable();
-  //Row* r = t->GetNext(linkDest);
-
   // update our table for the link that just changed
-  const Row newRow(linkDest, l->GetSrc(), linkLat);
-  t->SetNext(linkDest, newRow);
+  UpdateTableRow(l->GetDest(), l->GetSrc(), l->GetLatency());
 
+  // Update all costs as necessary based on changed link
   UpdateRoutingTable();
   
   cerr << *this<<": Link Update: "<<*l<<endl;
 }
-
 
 void Node::ProcessIncomingRoutingMessage(const RoutingMessage *m)
 {
@@ -220,7 +214,6 @@ void Node::UpdateRoutingTable()
   Table* t = this->GetRoutingTable();
   deque<Row> tDeque = t->GetDeque();
   // for each y in N:
-  // Update all costs as necessary based on changed link
   for (deque<Row>::iterator y = tDeque.begin(); y != tDeque.end(); ++y)
   {    
     unsigned yDest = y->dest_node;
@@ -245,13 +238,19 @@ void Node::UpdateRoutingTable()
     // send distance vector Dx = [Dx(y): y in N] to all neighbors
     if (y->cost != bestCost || y->next_node != bestNextHop)
     {
-      const Row newRow(yDest, bestNextHop, bestCost);
-      t->SetNext(yDest, newRow);
+      UpdateTableRow(yDest, bestNextHop, bestCost);
 
       Node linkDestNode(yDest, context, bw, bestCost);
       this->SendToNeighbors(new RoutingMessage(*this, linkDestNode, bestCost));
     }
   }
+}
+
+void Node::UpdateTableRow(unsigned dest, unsigned nextHop, double cost)
+{
+  Table* t = this->GetRoutingTable();
+  const Row newRow(dest, nextHop, cost);
+  t->SetNext(dest, newRow);
 }
 
 ostream & Node::Print(ostream &os) const
