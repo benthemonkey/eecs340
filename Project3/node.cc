@@ -181,8 +181,8 @@ void Node::LinkUpdate(const Link *l)
     t->SetNext(linkDest, newRow);
 
     //send out routing messages
-    Node destNode(linkDest, context, bw, linkLat);
-    this->SendToNeighbors(new RoutingMessage(*this, destNode, linkLat));
+    Node linkDestNode(linkDest, context, bw, linkLat);
+    this->SendToNeighbors(new RoutingMessage(*this, linkDestNode, linkLat + lat));
   }
 
   cerr << *this<<": Link Update: "<<*l<<endl;
