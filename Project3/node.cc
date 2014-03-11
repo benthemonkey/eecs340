@@ -169,8 +169,22 @@ ostream & Node::Print(ostream &os) const
 
 void Node::LinkUpdate(const Link *l)
 {
-  // update our table
-  // send out routing mesages
+  double linkLat = l->GetLatency();
+  unsigned linkDest = l->GetDest();
+  Table* t = this->GetRoutingTable();
+  Row* r = t->GetNext(linkDest);
+
+  if (r->cost > linkLat)
+  {
+    // update our table
+    const Row newRow(linkDest, l->GetSrc(), linkLat);
+    t->SetNext(linkDest, newRow);
+
+    //send out routing messages
+    Node destNode(linkDest, context, bw, linkLat);
+    this->SendToNeighbors(new RoutingMessage(*this, destNode, linkLat));
+  }
+
   cerr << *this<<": Link Update: "<<*l<<endl;
 }
 
@@ -195,7 +209,9 @@ void Node::TimeOut()
 
 Node *Node::GetNextHop(const Node *destination) const
 {
-  return table.GetNext(destination->number);
+  Row* r = (this->GetRoutingTable())->GetNext(destination->number);
+
+  return new Node(r->next_node, context, bw, r->cost);
 }
 
 Table *Node::GetRoutingTable() const

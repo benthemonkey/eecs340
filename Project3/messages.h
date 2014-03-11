@@ -13,7 +13,7 @@ struct RoutingMessage {
 };
 #endif
 
-#if defined(LINKSTATE)
+/*#if defined(LINKSTATE)
 struct RoutingMessage {
   Node srcnode;
   Link link;
@@ -27,7 +27,7 @@ struct RoutingMessage {
 
   ostream & Print(ostream &os) const;
 };
-#endif
+#endif*/
 
 #if defined(DISTANCEVECTOR)
 struct RoutingMessage {

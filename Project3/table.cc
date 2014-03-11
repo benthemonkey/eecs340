@@ -19,7 +19,7 @@ deque<Row>::iterator Table::FindMatching(const unsigned dest)
 {
   for (deque<Row>::iterator i = m.begin(); i != m.end(); ++i)
   {
-    if (m.dest_node == dest)
+    if (i->dest_node == dest)
     {
       return i;
     }
@@ -30,13 +30,16 @@ deque<Row>::iterator Table::FindMatching(const unsigned dest)
 
 Row *Table::GetNext(const unsigned dest)
 {
-  deq<Row>::iterator d = this->FindMatching(dest);
-  return this->FindMatching(d.next_node);
+  deque<Row>::iterator d = this->FindMatching(dest);
+  return new Row(d->dest_node, d->next_node, d->cost);
 }
 
 void Table::SetNext(const unsigned dest, const Row &r)
 {
-  Row* next = this->GetNext(dest);
+  deque<Row>::iterator d = this->FindMatching(dest);
+
+  d->next_node = r.next_node;
+  d->cost = r.cost;
 }
 
 Row::Row(const unsigned dest, const unsigned next, const double c) :

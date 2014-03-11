@@ -16,14 +16,14 @@ class Table {
 #endif
 
 
-#if defined(LINKSTATE)
+/*#if defined(LINKSTATE)
 class Table {
   // Students should write this class
 
  public:
   ostream & Print(ostream &os) const;
 };
-#endif
+#endif*/
 
 #if defined(DISTANCEVECTOR)
 
@@ -34,7 +34,7 @@ struct Row {
   unsigned next_node;
   double cost;
   ostream &Print(ostream &os) const;
-  
+
   Row(unsigned dest, unsigned next, double cost);
 };
 
