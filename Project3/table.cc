@@ -28,6 +28,11 @@ deque<Row>::iterator Table::FindMatching(const unsigned dest)
   return m.end();
 }
 
+deque<Row> Table::GetDeque()
+{
+  return m;
+}
+
 Row *Table::GetNext(const unsigned dest)
 {
   deque<Row>::iterator d = this->FindMatching(dest);

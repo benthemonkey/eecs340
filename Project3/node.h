@@ -29,6 +29,8 @@ class Node {
 
 #if defined(DISTANCEVECTOR)
   Table table;
+
+  void UpdateRoutingTable();
 #endif
 
   // students will add protocol-specific data here

@@ -172,19 +172,14 @@ void Node::LinkUpdate(const Link *l)
   double linkLat = l->GetLatency();
   unsigned linkDest = l->GetDest();
   Table* t = this->GetRoutingTable();
-  Row* r = t->GetNext(linkDest);
+  //Row* r = t->GetNext(linkDest);
 
-  if (r->cost > linkLat)
-  {
-    // update our table
-    const Row newRow(linkDest, l->GetSrc(), linkLat);
-    t->SetNext(linkDest, newRow);
+  // update our table for the link that just changed
+  const Row newRow(linkDest, l->GetSrc(), linkLat);
+  t->SetNext(linkDest, newRow);
 
-    //send out routing messages
-    Node linkDestNode(linkDest, context, bw, linkLat);
-    this->SendToNeighbors(new RoutingMessage(*this, linkDestNode, linkLat + lat));
-  }
-
+  UpdateRoutingTable();
+  
   cerr << *this<<": Link Update: "<<*l<<endl;
 }
 
@@ -199,6 +194,7 @@ void Node::ProcessIncomingRoutingMessage(const RoutingMessage *m)
     return;
   }
 
+  UpdateRoutingTable();
 }
 
 void Node::TimeOut()
@@ -219,6 +215,44 @@ Table *Node::GetRoutingTable() const
   return new Table(table);
 }
 
+void Node::UpdateRoutingTable()
+{
+  Table* t = this->GetRoutingTable();
+  deque<Row> tDeque = t->GetDeque();
+  // for each y in N:
+  // Update all costs as necessary based on changed link
+  for (deque<Row>::iterator y = tDeque.begin(); y != tDeque.end(); ++y)
+  {    
+    unsigned yDest = y->dest_node;
+    double tmpCost;
+    double bestCost = -1;
+    unsigned bestNextHop;
+
+    deque<Node*> *neighbors = GetNeighbors();
+    for (deque<Node*>::iterator v = neighbors->begin(); v != neighbors->end(); ++v)
+    {
+      // Dx(y) = minv{c(x,v) + Dv(y)}
+      unsigned vNum = (*v)->GetNumber();
+      tmpCost = (t->GetNext(vNum))->cost + (((*v)->GetRoutingTable())->GetNext(yDest))->cost;
+      if (tmpCost < bestCost || bestCost == -1)
+      {
+        bestCost = tmpCost;
+        bestNextHop = vNum;
+      }
+    }
+
+    // if Dx(y) changed for any destination y
+    // send distance vector Dx = [Dx(y): y in N] to all neighbors
+    if (y->cost != bestCost || y->next_node != bestNextHop)
+    {
+      const Row newRow(yDest, bestNextHop, bestCost);
+      t->SetNext(yDest, newRow);
+
+      Node linkDestNode(yDest, context, bw, bestCost);
+      this->SendToNeighbors(new RoutingMessage(*this, linkDestNode, bestCost));
+    }
+  }
+}
 
 ostream & Node::Print(ostream &os) const
 {

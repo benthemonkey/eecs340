@@ -44,6 +44,7 @@ class Table {
   deque<Row> m;
  public:
   deque<Row>::iterator FindMatching(const unsigned dest);
+  deque<Row> GetDeque();
   Row *GetNext(const unsigned dest);
   void SetNext(const unsigned dest, const Row &r);
   ostream & Print(ostream &os) const;
