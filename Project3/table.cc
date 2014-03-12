@@ -36,7 +36,13 @@ deque<Row> Table::GetDeque()
 Row *Table::GetNext(const unsigned dest)
 {
   deque<Row>::iterator d = this->FindMatching(dest);
-  return new Row(d->dest_node, d->next_node, d->cost);
+  if (d != m.end())
+  {
+    return new Row(d->dest_node, d->next_node, d->cost);
+  } else {
+    return new Row(-1, -1, 0);
+  }
+
 }
 
 void Table::SetNext(const unsigned dest, const Row &r)
