@@ -182,29 +182,49 @@ void Node::LinkUpdate(const Link *l)
   }
 }
 
+void Node::PN(unsigned n) //pretty print number
+{
+  if (n > 99)
+  {
+    cerr << n;
+  }
+  else if (n > 9)
+  {
+    cerr << " " << n;
+  }
+  else
+  {
+    cerr << "  " << n;
+  }
+}
+
 void Node::ProcessIncomingRoutingMessage(const RoutingMessage *m)
 {
   unsigned srcNum = m->srcnode.GetNumber(),
            destNum = m->dest.GetNumber();
-  cerr << "Node " << number << ": " << srcNum << " has new cost " << m->cost
-       << " path to " << destNum << " Action: ";
 
   if (destNum==GetNumber()) {
-    cerr << " ourself - ignored\n";
+    //cerr << " ourself - ignored\n";
     return;
   }
 
   Row* pathToSource = table.GetNext(srcNum);
   Row* pathToDest = table.GetNext(destNum);
-  cerr << "checking, cost to src: " << pathToSource->cost << ", current cost to dest: "
-       << pathToDest->cost;
+  // PN(number); cerr << " got: "; PN(srcNum); cerr << "--$"; PN((unsigned)m->cost); cerr << "-->"; PN(destNum);
+  // cerr << "checking: "; PN(number); cerr << "--$"; PN((unsigned)pathToSource->cost); cerr << "-->";
+  // PN(srcNum); cerr << "--$"; PN((unsigned)m->cost); cerr << "-->"; PN(destNum); cerr << " vs. $" << pathToDest->cost << ". ";
+
+  //   (pathToDest->next_node == srcNum
+  // && pathToDest->cost != pathToSource->cost + m->cost) I used to go through src in my best route but now his cost changed
+  // || pathToDest->cost < 1                              I currently don't know how to get to dest
+  // || pathToDest->cost > pathToSource->cost + m->cost   His path is better than mine
   if ((pathToDest->next_node == srcNum && pathToDest->cost != pathToSource->cost + m->cost)
         || pathToDest->cost < 1 || pathToDest->cost > pathToSource->cost + m->cost)
   {
-    cerr << " updating." << endl;
+    //cerr << " updating." << endl;
     UpdateTableRow(destNum, srcNum, pathToSource->cost + m->cost);
   } else {
-    cerr << " not updating." << endl;
+    //cerr << " not updating." << endl;
   }
 
   UpdateRoutingTable();
@@ -248,7 +268,8 @@ void Node::UpdateRoutingTable()
       // Dx(y) = minv{c(x,v) + Dv(y)}
       vNum = (*v)->GetNumber();
       cCost = (t->GetNext(vNum))->cost;
-      dCost = (((*v)->GetRoutingTable())->GetNext(yDest))->cost;
+      Row* vRow = ((*v)->GetRoutingTable())->GetNext(yDest);
+      dCost = vRow->cost;
       tmpCost = cCost + dCost;
 
       if (printout)
@@ -257,7 +278,11 @@ void Node::UpdateRoutingTable()
              << " [" << tmpCost << "]";
       }
 
-      if (cCost > 0 && (dCost > 0 || yDest == vNum) && (tmpCost < bestCost || bestCost == -1))
+      // vRow->next_node != number            Make sure my neighbor's best route isn't through me
+      // cCost > 0                            If its 0, I don't know how long it takes to get to my neighbor yet
+      // dCost > 0 || yDest == vNum           Either my neighbor doesn't know how to get to dest, or my neighbor is dest
+      // tmpCost < bestCost || bestCost == -1 My neighbor's route is better than my current one
+      if (vRow->next_node != number && cCost > 0 && (dCost > 0 || yDest == vNum) && (tmpCost < bestCost || bestCost == -1))
       {
         bestCost = tmpCost;
         bestNextHop = vNum;

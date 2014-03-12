@@ -29,7 +29,7 @@ class Node {
 
 #if defined(DISTANCEVECTOR)
   Table table;
-
+  void PN(unsigned n);
   void UpdateRoutingTable();
   void UpdateTableRow(unsigned dest, unsigned nextHop, double cost);
 #endif
