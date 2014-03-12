@@ -170,7 +170,7 @@ ostream & Node::Print(ostream &os) const
 void Node::LinkUpdate(const Link *l)
 {
   cerr << *this<<": Link Update: "<<*l<<endl;
-  
+
   // update our table for the link that just changed
   UpdateTableRow(l->GetDest(), l->GetDest(), l->GetLatency());
 
@@ -217,17 +217,22 @@ void Node::UpdateRoutingTable()
   for (deque<Row>::iterator y = tDeque.begin(); y != tDeque.end(); ++y)
   {
     unsigned yDest = y->dest_node;
-    double tmpCost;
+    double cCost, dCost, tmpCost;
     double bestCost = -1;
     unsigned bestNextHop;
 
+    cerr << "updating all costs to node: " << yDest << endl;
     deque<Node*> *neighbors = GetNeighbors();
     for (deque<Node*>::iterator v = neighbors->begin(); v != neighbors->end(); ++v)
     {
       // Dx(y) = minv{c(x,v) + Dv(y)}
       unsigned vNum = (*v)->GetNumber();
-      tmpCost = (t->GetNext(vNum))->cost + (((*v)->GetRoutingTable())->GetNext(yDest))->cost;
-      if (tmpCost > 0 && (tmpCost < bestCost || bestCost == -1))
+      cCost = (t->GetNext(vNum))->cost;
+      dCost = (((*v)->GetRoutingTable())->GetNext(yDest))->cost;
+      tmpCost = cCost + dCost;
+      cerr << number << " can reach neighbor " << vNum << " with cost " << cCost << endl;
+      cerr << vNum << " can reach dest node with cost " << dCost << endl;
+      if (cCost > 0 && (dCost > 0 || yDest == vNum) && (tmpCost < bestCost || bestCost == -1))
       {
         bestCost = tmpCost;
         bestNextHop = vNum;
@@ -236,8 +241,9 @@ void Node::UpdateRoutingTable()
 
     // if Dx(y) changed for any destination y
     // send distance vector Dx = [Dx(y): y in N] to all neighbors
-    if (y->cost != bestCost || y->next_node != bestNextHop)
+    if (bestCost > 0 && (y->cost != bestCost || y->next_node != bestNextHop))
     {
+      cerr << "changed value! reaching " << yDest << " via " << bestNextHop << " with cost " << bestCost << endl;
       UpdateTableRow(yDest, bestNextHop, bestCost);
 
       Node linkDestNode(yDest, context, bw, bestCost);
