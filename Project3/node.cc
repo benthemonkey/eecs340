@@ -169,13 +169,13 @@ ostream & Node::Print(ostream &os) const
 
 void Node::LinkUpdate(const Link *l)
 {
+  cerr << *this<<": Link Update: "<<*l<<endl;
+  
   // update our table for the link that just changed
-  UpdateTableRow(l->GetDest(), l->GetSrc(), l->GetLatency());
+  UpdateTableRow(l->GetDest(), l->GetDest(), l->GetLatency());
 
   // Update all costs as necessary based on changed link
   UpdateRoutingTable();
-
-  cerr << *this<<": Link Update: "<<*l<<endl;
 }
 
 void Node::ProcessIncomingRoutingMessage(const RoutingMessage *m)
@@ -227,7 +227,7 @@ void Node::UpdateRoutingTable()
       // Dx(y) = minv{c(x,v) + Dv(y)}
       unsigned vNum = (*v)->GetNumber();
       tmpCost = (t->GetNext(vNum))->cost + (((*v)->GetRoutingTable())->GetNext(yDest))->cost;
-      if (tmpCost < bestCost || bestCost == -1)
+      if (tmpCost > 0 && (tmpCost < bestCost || bestCost == -1))
       {
         bestCost = tmpCost;
         bestNextHop = vNum;
@@ -248,7 +248,7 @@ void Node::UpdateRoutingTable()
 
 void Node::UpdateTableRow(unsigned dest, unsigned nextHop, double cost)
 {
-  cerr << "Jizba and Ben updating table for node: " << number << ", dest: " << dest << ", next hop: " << nextHop << endl;
+  cerr << "Jizba and Ben updating table for node: " << number << ", dest: " << dest << ", next hop: " << nextHop << ", cost: " << cost << endl;
   //Table* t = this->GetRoutingTable();
   const Row newRow(dest, nextHop, cost);
   table.SetNext(dest, newRow);
