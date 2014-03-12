@@ -174,7 +174,7 @@ void Node::LinkUpdate(const Link *l)
 
   // Update all costs as necessary based on changed link
   UpdateRoutingTable();
-  
+
   cerr << *this<<": Link Update: "<<*l<<endl;
 }
 
@@ -215,7 +215,7 @@ void Node::UpdateRoutingTable()
   deque<Row> tDeque = t->GetDeque();
   // for each y in N:
   for (deque<Row>::iterator y = tDeque.begin(); y != tDeque.end(); ++y)
-  {    
+  {
     unsigned yDest = y->dest_node;
     double tmpCost;
     double bestCost = -1;
@@ -248,9 +248,10 @@ void Node::UpdateRoutingTable()
 
 void Node::UpdateTableRow(unsigned dest, unsigned nextHop, double cost)
 {
-  Table* t = this->GetRoutingTable();
+  cerr << "Jizba and Ben updating table for node: " << number << ", dest: " << dest << ", next hop: " << nextHop << endl;
+  //Table* t = this->GetRoutingTable();
   const Row newRow(dest, nextHop, cost);
-  t->SetNext(dest, newRow);
+  table.SetNext(dest, newRow);
 }
 
 ostream & Node::Print(ostream &os) const

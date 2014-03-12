@@ -43,8 +43,15 @@ void Table::SetNext(const unsigned dest, const Row &r)
 {
   deque<Row>::iterator d = this->FindMatching(dest);
 
-  d->next_node = r.next_node;
-  d->cost = r.cost;
+  if (d != m.end())
+  {
+    d->next_node = r.next_node;
+    d->cost = r.cost;
+  }
+  else
+  {
+    m.push_back(r);
+  }
 }
 
 Row::Row(const unsigned dest, const unsigned next, const double c) :
